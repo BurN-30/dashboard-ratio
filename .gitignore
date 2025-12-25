@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.pytest_cache/
+
+# Data
+stats.json
+history.json
+
+# HTML Dumps (fichiers temporaires)
+*.html
+*_files/
+
+# Node / Next.js (si jamais vous commitez le dossier dashboard ici)
+node_modules/
+.next/
+.DS_Store
