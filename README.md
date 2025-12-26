@@ -22,6 +22,9 @@ Un seul README pour tout: scraper sur une machine distante, upload FTP des JSON,
 ## Frontend (torrent-dashboard)
 - Dev: `cd torrent-dashboard && npm install && npm run dev` (http://localhost:3000).
 - Variables locales: créer `torrent-dashboard/.env.local` avec `ADMIN_PASSWORD=...` et `JSON_BASE_URL=https://example.com/dash`.
+   - Optionnel si dossier FTP protégé par `.htaccess`:
+      - `JSON_ORIGIN=https://dash.example.com`
+      - `JSON_AUTH_BASIC=user:password` (sera encodé en Basic)
 - Déploiement (Vercel): ajouter `ADMIN_PASSWORD` et `JSON_BASE_URL` dans Settings > Environment Variables. Root = `torrent-dashboard`. Build: `npm run build && npm run start` ou via Vercel.
 
 ## Fichiers produits
