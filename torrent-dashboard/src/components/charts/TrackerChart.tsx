@@ -3,7 +3,8 @@
 import { ApexOptions } from "apexcharts";
 import React from "react";
 import ReactApexChart from "react-apexcharts";
-import { AllStats } from "@/types/tracker";
+import { AllStats, TrackerData } from "@/types/tracker";
+import { useTheme } from "@/context/ThemeContext";
 
 interface TrackerChartProps {
   trackerName: string;
@@ -12,6 +13,7 @@ interface TrackerChartProps {
 
 const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => {
   const [metric, setMetric] = React.useState<'ratio' | 'buffer'>('ratio');
+  const { theme } = useTheme();
 
   const parseSize = (str: string): number => {
     if (!str) return 0;
@@ -20,9 +22,10 @@ const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => 
     if (isNaN(value)) return 0;
     
     const lower = cleanStr.toLowerCase();
-    if (lower.includes('tib') || lower.includes('tb')) return value * 1024;
-    if (lower.includes('gib') || lower.includes('gb')) return value;
-    if (lower.includes('mib') || lower.includes('mb')) return value / 1024;
+    if (lower.includes('tib') || lower.includes('tb') || lower.includes('to')) return value * 1024;
+    if (lower.includes('gib') || lower.includes('gb') || lower.includes('go')) return value;
+    if (lower.includes('mib') || lower.includes('mb') || lower.includes('mo')) return value / 1024;
+    if (lower.includes('kib') || lower.includes('kb') || lower.includes('ko')) return value / (1024 * 1024);
     return value;
   };
 
@@ -30,12 +33,12 @@ const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => 
   const data = history
     .filter((entry) => entry[trackerName])
     .map((entry) => {
-      const stats = entry[trackerName];
+      const stats = entry[trackerName] as TrackerData;
       // @ts-ignore
       const timestamp = entry._timestamp ? new Date(entry._timestamp * 1000).getTime() : new Date().getTime();
       
       let val = 0;
-      if (stats) {
+      if (stats && typeof stats === 'object' && 'ratio' in stats) {
         if (metric === 'ratio' && stats.ratio) {
              val = parseFloat(stats.ratio.replace(',', '.').replace(/[^\d.-]/g, ''));
         } else if (metric === 'buffer') {
@@ -65,6 +68,9 @@ const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => 
   ];
 
   const options: ApexOptions = {
+    theme: {
+      mode: theme,
+    },
     legend: {
       show: false,
       position: "top",
@@ -75,6 +81,7 @@ const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => 
       fontFamily: "Satoshi, sans-serif",
       height: 335,
       type: "area",
+      background: 'transparent',
       dropShadow: {
         enabled: true,
         color: "#623CEA14",
@@ -110,6 +117,7 @@ const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => 
       curve: "straight",
     },
     grid: {
+      borderColor: theme === 'dark' ? '#374151' : '#E2E8F0',
       xaxis: {
         lines: {
           show: true,
@@ -146,14 +154,32 @@ const TrackerChart: React.FC<TrackerChartProps> = ({ trackerName, history }) => 
       axisTicks: {
         show: false,
       },
+      labels: {
+        style: {
+          colors: theme === 'dark' ? '#9CA3AF' : '#64748B',
+        },
+      },
+      tooltip: {
+        enabled: false,
+      },
     },
     yaxis: {
+      labels: {
+        style: {
+          colors: theme === 'dark' ? '#9CA3AF' : '#64748B',
+        },
+      },
       title: {
         style: {
           fontSize: "0px",
         },
       },
       min: 0,
+    },
+    tooltip: {
+      x: {
+        format: 'dd MMM yyyy HH:mm',
+      },
     },
   };
 
