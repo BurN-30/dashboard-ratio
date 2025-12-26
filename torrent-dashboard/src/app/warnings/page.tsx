@@ -39,9 +39,11 @@ export default function WarningsPage() {
         Warnings & Hit and Run
       </h1>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:gap-7.5">
-        {Object.entries(stats).map(([name, data]) => (
-          <WarningCard key={name} name={name} data={data} />
-        ))}
+        {Object.entries(stats)
+          .filter(([name]) => name !== "_timestamp")
+          .map(([name, data]) => (
+            <WarningCard key={name} name={name} data={data as TrackerData} />
+          ))}
       </div>
     </div>
   );
@@ -49,12 +51,10 @@ export default function WarningsPage() {
 
 function WarningCard({ name, data }: { name: string; data: TrackerData }) {
   const isUnit3D = (data: TrackerData): data is Unit3DStats => {
-    return (data as Unit3DStats).warnings_active !== undefined;
+    return (data as Unit3DStats).real_ratio !== undefined;
   };
 
-  const isSharewood = (data: TrackerData): data is SharewoodStats => {
-    return (data as SharewoodStats).vol_upload_final !== undefined;
-  };
+  const isSharewood = name === 'Sharewood';
 
   let warnings = "0";
   let hitAndRun = "0";
@@ -62,9 +62,10 @@ function WarningCard({ name, data }: { name: string; data: TrackerData }) {
   if (isUnit3D(data)) {
     warnings = data.warnings_active;
     hitAndRun = data.hit_and_run;
-  } else if (isSharewood(data)) {
-    warnings = data.warnings || "0 / 3";
-    hitAndRun = data.hit_and_run;
+  } else if (isSharewood) {
+    const s = data as SharewoodStats;
+    warnings = s.warnings_active || "0 / 3";
+    hitAndRun = s.hit_and_run || "0";
   }
 
   // Determine status color

@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useTheme } from "@/context/ThemeContext";
 import { fetchTorrentStats, fetchTorrentHistory } from "@/lib/api";
 import { AllStats, TrackerData, Unit3DStats, SharewoodStats } from "@/types/tracker";
+import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, RefreshCw, BarChart2, Clock, LogOut, Sun, Moon } from "lucide-react";
 import dynamic from "next/dynamic";
 
 // Dynamically import Chart to avoid SSR issues
@@ -14,6 +18,14 @@ export default function Home() {
   const [stats, setStats] = useState<AllStats | null>(null);
   const [history, setHistory] = useState<AllStats[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -50,15 +62,44 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-      <h1 className="mb-6 text-2xl font-bold text-black dark:text-white">
-        Tracker Stats
-      </h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-black dark:text-white">
+          Tracker Stats
+        </h1>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            title="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
+          <Link 
+            href="/traffic" 
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          >
+             <BarChart2 className="w-4 h-4" />
+             Details
+          </Link>
+
+          <button
+            onClick={handleLogout}
+            className="flex items-center justify-center w-8 h-8 text-red-500 bg-red-50 dark:bg-red-900/20 rounded-md hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
       
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:gap-7.5 mb-10">
-        {Object.entries(stats).map(([name, data]) => (
-          <TrackerCard key={name} name={name} data={data} />
-        ))}
+        {Object.entries(stats)
+          .filter(([name]) => name !== "_timestamp")
+          .map(([name, data]) => (
+            <TrackerCard key={name} name={name} data={data as TrackerData} />
+          ))}
       </div>
 
       {/* Charts */}
@@ -68,7 +109,9 @@ export default function Home() {
             Ratio History
           </h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-             {Object.keys(stats).map((name) => (
+             {Object.keys(stats)
+               .filter((name) => name !== "_timestamp")
+               .map((name) => (
                 <div key={name} className="col-span-1">
                    <TrackerChart trackerName={name} history={history} />
                 </div>
@@ -83,9 +126,9 @@ export default function Home() {
 function TrackerCard({ name, data }: { name: string; data: TrackerData }) {
   // Helper to unify data access
   const getStats = (d: TrackerData) => {
-    const isUnit3D = (d as Unit3DStats).warnings_active !== undefined;
+    const isSharewood = name === 'Sharewood';
     
-    if (isUnit3D) {
+    if (!isSharewood) {
       const u = d as Unit3DStats;
       return {
         ratio: u.ratio,
@@ -96,8 +139,7 @@ function TrackerCard({ name, data }: { name: string; data: TrackerData }) {
         download: u.vol_download,
         seed_time_total: u.seed_time_total,
         seed_time_avg: u.seed_time_avg,
-        download_count: u.count_downloaded,
-        upload_count: u.count_up_total || u.count_up_non_anon || "0"
+        download_count: u.count_downloaded
       };
     } else {
       const s = d as SharewoodStats;
@@ -110,8 +152,7 @@ function TrackerCard({ name, data }: { name: string; data: TrackerData }) {
         download: s.vol_download,
         seed_time_total: s.time_seed_total,
         seed_time_avg: s.time_seed_avg,
-        download_count: s.count_download,
-        upload_count: s.count_upload
+        download_count: s.count_download
       };
     }
   };
@@ -133,19 +174,31 @@ function TrackerCard({ name, data }: { name: string; data: TrackerData }) {
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="space-y-1">
             <p className="text-xs text-gray-500 uppercase">Buffer / Capacité</p>
-            <p className="text-lg font-bold text-black dark:text-white">{stats.buffer}</p>
+            <div className="flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-blue-500" />
+                <p className="text-lg font-bold text-black dark:text-white">{stats.buffer}</p>
+            </div>
         </div>
         <div className="space-y-1">
             <p className="text-xs text-gray-500 uppercase">Points Bonus</p>
-            <p className="text-lg font-bold text-brand-500">{stats.points}</p>
+            <div className="flex items-center gap-2">
+                <Coins className="w-4 h-4 text-yellow-500" />
+                <p className="text-lg font-bold text-brand-500">{stats.points}</p>
+            </div>
         </div>
         <div className="space-y-1">
             <p className="text-xs text-gray-500 uppercase">Upload Vol.</p>
-            <p className="text-sm font-medium text-black dark:text-white">{stats.upload}</p>
+            <div className="flex items-center gap-2">
+                <ArrowUp className="w-4 h-4 text-success-500" />
+                <p className="text-sm font-medium text-black dark:text-white">{stats.upload}</p>
+            </div>
         </div>
         <div className="space-y-1">
             <p className="text-xs text-gray-500 uppercase">Download Vol.</p>
-            <p className="text-sm font-medium text-black dark:text-white">{stats.download}</p>
+            <div className="flex items-center gap-2">
+                <ArrowDown className="w-4 h-4 text-error-500" />
+                <p className="text-sm font-medium text-black dark:text-white">{stats.download}</p>
+            </div>
         </div>
       </div>
 
@@ -155,22 +208,48 @@ function TrackerCard({ name, data }: { name: string; data: TrackerData }) {
         <div className="space-y-2">
             <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Torrents Seeding</span>
-                <span className="font-medium text-black dark:text-white">{stats.seed_count}</span>
+                <div className="flex items-center gap-2">
+                    <UploadCloud className="w-4 h-4 text-success-500" />
+                    <span className="font-medium text-black dark:text-white">{stats.seed_count}</span>
+                </div>
             </div>
             <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Torrents Downloaded</span>
-                <span className="font-medium text-black dark:text-white">{stats.download_count}</span>
+                <div className="flex items-center gap-2">
+                    <DownloadCloud className="w-4 h-4 text-blue-500" />
+                    <span className="font-medium text-black dark:text-white">{stats.download_count}</span>
+                </div>
             </div>
             <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Total Seed Time</span>
-                <span className="font-medium text-black dark:text-white">{stats.seed_time_total}</span>
+                <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-400" />
+                    <span className="font-medium text-black dark:text-white">{stats.seed_time_total}</span>
+                </div>
             </div>
             <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Avg Seed Time</span>
-                <span className="font-medium text-black dark:text-white">{stats.seed_time_avg}</span>
+                <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-400" />
+                    <span className="font-medium text-black dark:text-white">{stats.seed_time_avg}</span>
+                </div>
             </div>
         </div>
       </div>
     </div>
   );
+}
+
+function StatRow({ label, value, highlight = false, icon: Icon }: { label: string; value: string; highlight?: boolean; icon?: React.ElementType }) {
+    return (
+        <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+            <div className="flex items-center gap-2">
+                {Icon && <Icon className={`w-4 h-4 ${highlight ? "text-brand-500" : "text-gray-400"}`} />}
+                <span className={`text-sm font-medium ${highlight ? "text-brand-500 font-bold" : "text-black dark:text-white"}`}>
+                    {value}
+                </span>
+            </div>
+        </div>
+    );
 }

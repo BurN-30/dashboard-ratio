@@ -2,6 +2,8 @@ import json
 import time
 import ftplib
 import os
+import re
+from datetime import datetime
 from playwright.sync_api import sync_playwright
 from dotenv import load_dotenv
 
@@ -52,16 +54,72 @@ SITES = [
 ]
 
 def clean(text):
-    """Nettoie le texte (espaces, retours à la ligne)"""
+    """Nettoie le texte (espaces, retours à la ligne) et convertit les unités"""
     if not text: return "0"
-    return text.replace('\xa0', ' ').replace('\u202f', ' ').strip().replace('\n', ' ')
+    text = text.replace('\xa0', ' ').replace('\u202f', ' ').strip().replace('\n', ' ')
+    
+    # Conversion des unités (Anglais -> Français)
+    text = text.replace("TiB", "To")
+    text = text.replace("GiB", "Go")
+    text = text.replace("MiB", "Mo")
+    text = text.replace("KiB", "Ko")
+    
+    # Remplacement de " B" par " o" (seulement si à la fin pour éviter les faux positifs)
+    if text.endswith(" B"):
+        text = text[:-1] + "o"
+        
+    return text
 
-def get_unit3d_val(page, label):
+def format_duration(text):
+    """Formate la durée en français et standardise l'affichage"""
+    if not text or text == "0": return "0"
+    
+    # 1. Ajouter des espaces entre les chiffres et les lettres si absents (ex: 1M2S -> 1M 2S)
+    text = re.sub(r'(\d+)([a-zA-Z]+)', r'\1 \2', text)
+    
+    # 1b. Ajouter des espaces entre les lettres et les chiffres (ex: M2 -> M 2)
+    text = re.sub(r'([a-zA-Z]+)(\d+)', r'\1 \2', text)
+    
+    # 2. Nettoyer les espaces multiples
+    text = text.replace("  ", " ").strip()
+    
+    # 3. Remplacements d'unités
+    # Années
+    text = re.sub(r'\b(\d+)\s*[Yy]\b', r'\1 an(s)', text)
+    
+    # Mois (M majuscule)
+    text = re.sub(r'\b(\d+)\s*M\b', r'\1 mois', text)
+    
+    # Semaines (W ou S majuscule)
+    text = re.sub(r'\b(\d+)\s*[Ww]\b', r'\1 sem', text)
+    text = re.sub(r'\b(\d+)\s*S\b', r'\1 sem', text)
+    
+    # Jours
+    text = re.sub(r'\b(\d+)\s*[Dd]\b', r'\1 j', text)
+    text = re.sub(r'\b(\d+)\s*[Jj]\b', r'\1 j', text)
+    
+    # Heures
+    text = re.sub(r'\b(\d+)\s*[Hh]\b', r'\1 h', text)
+    
+    # Minutes (m minuscule)
+    text = re.sub(r'\b(\d+)\s*m\b', r'\1 min', text)
+    
+    # Secondes (s minuscule)
+    text = re.sub(r'\b(\d+)\s*s\b', r'\1 s', text)
+    
+    return text
+
+def get_unit3d_val(page, label, exact=False):
     """Cherche une valeur dans les listes key-value de UNIT3D"""
     # Use normalize-space to handle newlines and extra spaces in labels
-    xpath = f'//dt[contains(normalize-space(.), "{label}")]/following-sibling::dd'
+    if exact:
+        xpath = f'//dt[normalize-space(.)="{label}"]/following-sibling::dd'
+    else:
+        xpath = f'//dt[contains(normalize-space(.), "{label}")]/following-sibling::dd'
     try:
-        return clean(page.inner_text(xpath))
+        # On laisse 1 seconde pour trouver l'élément (suffisant si la page est chargée)
+        # au lieu de 30s par défaut qui bloquait tout si le champ était absent
+        return clean(page.locator(xpath).first.inner_text(timeout=1000))
     except:
         return "0"
 
@@ -69,7 +127,6 @@ def scrape_sharewood(page):
     data = {}
     try:
         # 1. BARRE DU HAUT
-        data['count_upload'] = clean(page.inner_text('//span[contains(., "Total uploads")]')).split(':')[-1].strip()
         data['count_download'] = clean(page.inner_text('//span[contains(., "Total downloads")]')).split(':')[-1].strip()
         data['count_seed'] = clean(page.inner_text('//span[contains(., "Total en seed")]')).split(':')[-1].strip()
         data['count_leech'] = clean(page.inner_text('//span[contains(., "Total en leech")]')).split(':')[-1].strip()
@@ -78,37 +135,32 @@ def scrape_sharewood(page):
         data['vol_download'] = clean(page.inner_text('span[data-original-title="Téléchargé"]'))
         
         try:
-            up_vrai = clean(page.inner_text('span[data-original-title="Vrai upload"]'))
-            up_bonus = clean(page.inner_text('span[data-original-title="Upload échangé contre Bonus"]'))
             up_total = clean(page.inner_text('span[data-original-title="Upload enregistré"]'))
-            data['vol_upload_detail'] = f"{up_vrai} + {up_bonus} = {up_total}"
             data['vol_upload'] = up_total 
         except:
             data['vol_upload'] = clean(page.inner_text('//tr[td[strong[contains(text(), "Upload")]]]/td[2]'))
 
         data['ratio'] = clean(page.inner_text('//tr[td[strong[contains(text(), "Ratio")]]]/td[2]'))
         data['buffer'] = clean(page.inner_text('//tr[td[strong[contains(text(), "Capacité de DL")]]]/td[2]'))
-        data['freeleech_pool'] = clean(page.inner_text('//tr[td[strong[contains(text(), "Don Freeleech Pool")]]]/td[2]'))
-        data['time_seed_total'] = clean(page.inner_text('//tr[td[strong[contains(text(), "Temps total de seed")]]]/td[2]'))
-        data['time_seed_avg'] = clean(page.inner_text('//tr[td[strong[contains(text(), "Temps de seed moyen")]]]/td[2]'))
+        data['time_seed_total'] = format_duration(clean(page.inner_text('//tr[td[strong[contains(text(), "Temps total de seed")]]]/td[2]')))
+        data['time_seed_avg'] = format_duration(clean(page.inner_text('//tr[td[strong[contains(text(), "Temps de seed moyen")]]]/td[2]')))
 
         # 3. SECTION EXTRA
         data['points_bonus'] = clean(page.inner_text('//strong[contains(., "Bonus")]/following-sibling::span'))
         data['fl_tokens'] = clean(page.inner_text('//strong[contains(., "Jetons FL")]/following-sibling::span'))
-        data['thanks_received'] = clean(page.inner_text('//strong[contains(., "Remerciements reçus")]/following-sibling::span'))
-        data['thanks_given'] = clean(page.inner_text('//strong[contains(., "Remerciements donnés")]/following-sibling::span'))
         data['hit_and_run'] = clean(page.inner_text('//strong[contains(., "Hit&Run")]/following-sibling::span'))
         
         # Warnings (Sharewood)
         try:
             # "Warnings Avertissements en cours : 0 / 3"
-            # On cherche le texte qui contient "Avertissements en cours"
-            # Correction: C'est dans un span/strong, pas un li
             warnings_text = clean(page.inner_text('//span[contains(., "Avertissements en cours")]'))
-            # On extrait juste "0 / 3" ou tout le texte
-            data['warnings'] = warnings_text.replace("Warnings", "").strip()
+            # Extraction de "0 / 3"
+            parts = warnings_text.split(":")[-1].strip().split("/")
+            data['warnings_active'] = parts[0].strip()
+            data['warnings_limit'] = parts[1].strip() if len(parts) > 1 else "3"
         except:
-            data['warnings'] = "0 / 3"
+            data['warnings_active'] = "0"
+            data['warnings_limit'] = "3"
 
     except Exception as e:
         print(f"⚠️ Erreur partielle Sharewood: {e}")
@@ -125,26 +177,20 @@ def scrape_unit3d(page, site_name):
          data['hit_and_run'] = get_unit3d_val(page, "Compteur de Hit and Run")
     
     # SEED STATS
-    data['seed_time_total'] = get_unit3d_val(page, "Durée totale des seeds")
+    data['seed_time_total'] = format_duration(get_unit3d_val(page, "Durée totale des seeds"))
     if data['seed_time_total'] == "0": 
-        data['seed_time_total'] = get_unit3d_val(page, "Temps de seed total")
+        data['seed_time_total'] = format_duration(get_unit3d_val(page, "Temps de seed total"))
         
-    data['seed_time_avg'] = get_unit3d_val(page, "Temps de seed moyen")
+    data['seed_time_avg'] = format_duration(get_unit3d_val(page, "Temps de seed moyen"))
     data['seed_size'] = get_unit3d_val(page, "Seeding Size")
     if data['seed_size'] == "0": data['seed_size'] = get_unit3d_val(page, "Volume de Seed")
 
     # TORRENT COUNT
-    data['count_up_non_anon'] = get_unit3d_val(page, "Uploads au total (Non-Anonyme)")
-    data['count_up_anon'] = get_unit3d_val(page, "Uploads au total (Anonyme)")
-    if data['count_up_non_anon'] == "0" and data['count_up_anon'] == "0":
-        data['count_up_total'] = get_unit3d_val(page, "Total uploadés")
-
     data['count_downloaded'] = get_unit3d_val(page, "Total des téléchargés")
     if data['count_downloaded'] == "0": data['count_downloaded'] = get_unit3d_val(page, "Total complétés")
 
     data['count_seed'] = get_unit3d_val(page, "Total en seed")
     data['count_leech'] = get_unit3d_val(page, "Total en leech")
-    data['count_inactive'] = get_unit3d_val(page, "Total Inactive Peers")
 
     # TRAFFIC
     data['ratio'] = get_unit3d_val(page, "Ratio")
@@ -165,34 +211,24 @@ def scrape_unit3d(page, site_name):
     if data['torrent_uploader_credited'] == "0": data['torrent_uploader_credited'] = get_unit3d_val(page, "Torrent Uploader (Credité)")
 
     data['torrent_downloader'] = get_unit3d_val(page, "Torrent Télécharger")
-    data['torrent_downloader_credited'] = get_unit3d_val(page, "Torrent Télécharger (Credité)")
-    data['torrent_downloader_refunded'] = get_unit3d_val(page, "Torrent Télécharger (Refunded)")
-    if data['torrent_downloader_refunded'] == "0": data['torrent_downloader_refunded'] = get_unit3d_val(page, "Torrent Télécharger (Remboursé)")
 
     # RECOMPENSES / POINTS
     # Normalisation: on utilise 'points_bonus' pour tout le monde
-    data['points_bonus'] = get_unit3d_val(page, "Coupon")
+    data['points_bonus'] = get_unit3d_val(page, "Coupon", exact=True)
     if data['points_bonus'] == "0" or data['points_bonus'] == "":
-         data['points_bonus'] = get_unit3d_val(page, "Point Bonus")
+         data['points_bonus'] = get_unit3d_val(page, "Point Bonus", exact=True)
     
     data['fl_tokens'] = get_unit3d_val(page, "Jetons Freeleech")
-    data['thanks_given'] = get_unit3d_val(page, "Merci donné")
-    data['thanks_received'] = get_unit3d_val(page, "Merci reçu")
+    # data['thanks_given'] = get_unit3d_val(page, "Merci donné")
+    # data['thanks_received'] = get_unit3d_val(page, "Merci reçu")
     
     # COMMUNITY / EXTRA
-    data['invitations'] = get_unit3d_val(page, "Invitations")
-    data['points_bonus_received'] = get_unit3d_val(page, "Points Bonus reçus")
-    data['points_bonus_given'] = get_unit3d_val(page, "Points Bonus donnés")
-    data['primes_received'] = get_unit3d_val(page, "Primes reçues")
-    data['primes_given'] = get_unit3d_val(page, "Primes données")
-    data['conseils_received'] = get_unit3d_val(page, "Conseils reçus")
-    data['conseils_given'] = get_unit3d_val(page, "Conseils donnés")
-
+    # data['invitations'] = get_unit3d_val(page, "Invitations")
+    # data['points_bonus_received'] = get_unit3d_val(page, "Points Bonus reçus")
+    
     return data
 
 def upload_to_ftp():
-    """Envoie le fichier JSON sur le serveur O2Switch"""
-    print(f"--- 📤 Envoi FTP vers {FTP_HOST} ({FTP_DIR}) ---")
     try:
         session = ftplib.FTP(FTP_HOST, FTP_USER, FTP_PASS)
         # session.set_debuglevel(1) 
@@ -224,6 +260,37 @@ def upload_to_ftp():
     except Exception as e:
         print(f"❌ Erreur FTP critique : {e}")
 
+def clean_history(history):
+    """
+    Optimise l'historique pour ne pas qu'il grossisse indéfiniment.
+    - Moins de 30 jours : On garde TOUTES les entrées.
+    - Plus de 30 jours : On ne garde qu'UNE entrée par jour.
+    """
+    if not history: return []
+
+    now = time.time()
+    thirty_days_ago = now - (30 * 24 * 3600)
+    
+    new_history = []
+    seen_days = set()
+    
+    # On parcourt l'historique (du plus vieux au plus récent généralement)
+    for entry in history:
+        ts = entry.get('_timestamp')
+        if not ts: continue
+        
+        if ts > thirty_days_ago:
+            # C'est récent (moins de 30j) : on garde tout
+            new_history.append(entry)
+        else:
+            # C'est vieux : on ne garde qu'une entrée par jour
+            date_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+            if date_str not in seen_days:
+                new_history.append(entry)
+                seen_days.add(date_str)
+    
+    return new_history
+
 def main():
     final_data = {}
     
@@ -240,10 +307,13 @@ def main():
                 page.goto(site['login_url'])
                 try:
                     if page.locator('input[name="username"]').count() > 0:
-                        page.fill('input[name="username"]', site['username'])
-                        page.fill('input[name="password"]', site['password'])
-                        page.press('input[name="password"]', 'Enter')
-                        page.wait_for_load_state('networkidle')
+                        if not site['username'] or not site['password']:
+                            print(f"   ⚠️  Identifiants manquants pour {site['name']} (Vérifiez le fichier .env)")
+                        else:
+                            page.fill('input[name="username"]', site['username'])
+                            page.fill('input[name="password"]', site['password'])
+                            page.press('input[name="password"]', 'Enter')
+                            page.wait_for_load_state('networkidle')
                 except Exception as login_err:
                     print(f"   Info Login: {login_err}")
                 
@@ -281,9 +351,8 @@ def main():
     
     history.append(final_data)
     
-    # Garder les 720 dernières entrées (30 jours si 1h)
-    if len(history) > 720:
-        history = history[-720:]
+    # Nettoyage intelligent de l'historique
+    history = clean_history(history)
 
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, indent=4, ensure_ascii=False)
