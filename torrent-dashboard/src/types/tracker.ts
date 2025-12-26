@@ -9,13 +9,9 @@ export interface Unit3DStats {
   seed_size: string;
 
   // Torrent Count
-  count_up_non_anon?: string;
-  count_up_anon?: string;
-  count_up_total?: string;
   count_downloaded: string;
   count_seed: string;
   count_leech: string;
-  count_inactive: string;
 
   // Traffic
   ratio: string;
@@ -28,37 +24,23 @@ export interface Unit3DStats {
   torrent_uploader?: string;
   torrent_uploader_credited?: string;
   torrent_downloader?: string;
-  torrent_downloader_credited?: string;
-  torrent_downloader_refunded?: string;
 
   // Rewards / Points
   points_bonus: string;
   fl_tokens: string;
-  thanks_given: string;
-  thanks_received?: string;
-  
-  // Community / Extra
-  invitations?: string;
-  points_bonus_received?: string;
-  points_bonus_given?: string;
-  primes_received?: string;
-  primes_given?: string;
 }
 
 export interface SharewoodStats {
   // Counts
-  count_upload: string;
   count_download: string;
   count_seed: string;
   count_leech: string;
 
   // Traffic
   vol_download: string;
-  vol_upload_detail?: string;
   vol_upload: string;
   ratio: string;
   buffer: string;
-  freeleech_pool: string;
 
   // Seed Time
   time_seed_total: string;
@@ -67,17 +49,16 @@ export interface SharewoodStats {
   // Extra
   points_bonus: string;
   fl_tokens: string;
-  thanks_received: string;
-  thanks_given: string;
   hit_and_run: string;
   
   // Warnings
-  warnings?: string;
+  warnings_active?: string;
+  warnings_limit?: string;
 }
 
 export type TrackerData = Unit3DStats | SharewoodStats;
 
 export interface AllStats {
-  [key: string]: TrackerData;
+  [key: string]: TrackerData | number | undefined;
   _timestamp?: number;
 }
