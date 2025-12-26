@@ -2,14 +2,18 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const res = await fetch('https://dash.example.com/stats.json', {
-      cache: 'no-store',
-    });
-    
-    if (!res.ok) {
-      return NextResponse.json({ error: 'Failed to fetch data from source' }, { status: res.status });
+    const base = process.env.JSON_BASE_URL;
+    if (!base) {
+      return NextResponse.json({ error: 'Missing JSON_BASE_URL' }, { status: 500 });
     }
-    
+
+    const url = `${base.replace(/\/$/, '')}/stats.json`;
+    const res = await fetch(url, { cache: 'no-store' });
+
+    if (!res.ok) {
+      return NextResponse.json({ error: 'Failed to fetch data from source', url }, { status: res.status });
+    }
+
     const data = await res.json();
     return NextResponse.json(data);
   } catch (error) {
