@@ -4,7 +4,7 @@ Un seul README pour tout: scraper sur une machine distante, upload FTP des JSON,
 
 ## Vue rapide
 - Scraper (Playwright) tourne sur une autre machine, génère `stats.json` et `history.json`, puis les envoie en FTP vers `dash.example.com`.
-- Les routes Next.js `/api/stats` et `/api/history` ne font que proxy `https://dash.example.com/stats.json` et `https://dash.example.com/history.json`.
+- Les routes Next.js `/api/stats` et `/api/history` proxient `${JSON_BASE_URL}/stats.json` et `${JSON_BASE_URL}/history.json`.
 - Le frontend lit ces API et affiche les stats/graphes.
 
 ## Démarrage (scraper)
@@ -21,13 +21,13 @@ Un seul README pour tout: scraper sur une machine distante, upload FTP des JSON,
 
 ## Frontend (torrent-dashboard)
 - Dev: `cd torrent-dashboard && npm install && npm run dev` (http://localhost:3000).
-- Les API internes attendent les JSON publics à `https://dash.example.com/stats.json` et `history.json`.
-- Déploiement rapide (Vercel): `cd torrent-dashboard && npm install && vercel` (root dir = torrent-dashboard). Sinon, build: `npm run build && npm run start`.
+- Variables locales: créer `torrent-dashboard/.env.local` avec `ADMIN_PASSWORD=...` et `JSON_BASE_URL=https://example.com/dash`.
+- Déploiement (Vercel): ajouter `ADMIN_PASSWORD` et `JSON_BASE_URL` dans Settings > Environment Variables. Root = `torrent-dashboard`. Build: `npm run build && npm run start` ou via Vercel.
 
 ## Fichiers produits
 - `stats.json`: snapshot actuel.
 - `history.json`: historique avec réduction après 30 jours (1 entrée/jour).
-- Servis via FTP dans `/public_html/dash/` sur `dash.example.com`.
+- Servis via FTP dans `/public_html/dash/` et accessibles via `${JSON_BASE_URL}` (ex: `https://example.com/dash`).
 
 ## Tests (optionnel)
 - `python test_architecture.py` (nécessite `requests` et `python-dotenv`). Vérifie fichiers locaux, .env, FTP, accès web; échouera pour les routes Next tant que le site n’est pas déployé.
