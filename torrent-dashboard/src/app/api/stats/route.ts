@@ -9,7 +9,24 @@ export async function GET() {
     const url = `${base.replace(/\/$/, '')}/stats.json`;
     console.log('[/api/stats] Fetching from:', url);
 
-    const res = await fetch(url, { cache: 'no-store' });
+    // Optional headers for protected endpoints (Basic Auth via .htaccess) and origin hint
+    const origin = process.env.JSON_ORIGIN || 'https://dash.example.com';
+    const basic = process.env.JSON_AUTH_BASIC; // format: user:password
+    const headers: Record<string, string> = {
+      Origin: origin,
+      'User-Agent': 'DashboardFetcher/1.0',
+    };
+    if (basic) {
+      try {
+        const token = Buffer.from(basic).toString('base64');
+        headers['Authorization'] = `Basic ${token}`;
+        console.log('[/api/stats] Using Basic auth');
+      } catch (e) {
+        console.warn('[/api/stats] Failed to construct Basic auth header');
+      }
+    }
+
+    const res = await fetch(url, { cache: 'no-store', headers });
     console.log('[/api/stats] Response status:', res.status);
 
     if (!res.ok) {
