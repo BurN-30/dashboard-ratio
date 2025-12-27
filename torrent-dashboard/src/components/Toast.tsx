@@ -23,7 +23,7 @@ export default function Toast({ message, type, duration = 3000, onClose }: Toast
 
   return (
     <div
-      className={`fixed bottom-4 right-4 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 z-50 ${
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 min-w-80 ${
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
       } ${
         type === 'success'
