@@ -63,8 +63,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-dark">
-      <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 flex-1">
+    <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-black dark:text-white">
           Tracker Stats
@@ -124,8 +123,7 @@ export default function Home() {
           </div>
         </>
       )}
-      </div>
-      <footer className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 w-full">
+      <footer className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 mt-auto">
         <LastUpdateInfo />
       </footer>
     </div>
