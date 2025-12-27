@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/context/ThemeContext";
+import { useToast } from "@/context/ToastContext";
 import { fetchTorrentStats, fetchTorrentHistory } from "@/lib/api";
 import { AllStats, TrackerData, Unit3DStats, SharewoodStats } from "@/types/tracker";
 import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, RefreshCw, BarChart2, Clock, LogOut, Sun, Moon } from "lucide-react";
@@ -20,7 +21,10 @@ export default function Home() {
   const [stats, setStats] = useState<AllStats | null>(null);
   const [history, setHistory] = useState<AllStats[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { showToast } = useToast();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -29,22 +33,73 @@ export default function Home() {
     router.refresh();
   };
 
-  useEffect(() => {
-    async function loadData() {
-      const [currentData, historyData] = await Promise.all([
-        fetchTorrentStats(),
-        fetchTorrentHistory(),
-      ]);
-      setStats(currentData);
-      setHistory(historyData);
-      setLoading(false);
+  // Fonction pour recharger les données
+  const loadData = async () => {
+    const [currentData, historyData] = await Promise.all([
+      fetchTorrentStats(),
+      fetchTorrentHistory(),
+    ]);
+    setStats(currentData);
+    setHistory(historyData);
+    if (currentData && currentData._timestamp) {
+      setLastTimestamp(currentData._timestamp);
     }
+    setLoading(false);
+  };
+
+  // Polling pour détecter quand les données changent après refresh
+  const startPolling = () => {
+    if (isPolling) return;
+    setIsPolling(true);
+    let attempts = 0;
+    const maxAttempts = 15; // 30 secondes (2s * 15)
+
+    const poll = async () => {
+      attempts++;
+      try {
+        const newStats = await fetchTorrentStats();
+        if (newStats && newStats._timestamp && newStats._timestamp !== lastTimestamp) {
+          // Données ont changé !
+          setStats(newStats);
+          setLastTimestamp(newStats._timestamp);
+          setIsPolling(false);
+          showToast('Données mises à jour !', 'success', 4000);
+          return;
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+
+      if (attempts >= maxAttempts) {
+        setIsPolling(false);
+        showToast('Timeout — scraper peut encore être en cours', 'error', 3000);
+        return;
+      }
+
+      // Polling suivant dans 2 secondes
+      setTimeout(poll, 2000);
+    };
+
+    poll();
+  };
+
+  useEffect(() => {
     loadData();
 
     // Auto-refresh every 5 minutes
     const interval = setInterval(loadData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Listener pour quand le refresh button est cliqué
+  useEffect(() => {
+    const handleRefreshClick = () => {
+      startPolling();
+    };
+
+    window.addEventListener('refresh-clicked', handleRefreshClick);
+    return () => window.removeEventListener('refresh-clicked', handleRefreshClick);
+  }, [lastTimestamp]);
 
   if (loading) {
     return (
