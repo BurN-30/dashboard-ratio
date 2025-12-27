@@ -8,6 +8,8 @@ import { fetchTorrentStats, fetchTorrentHistory } from "@/lib/api";
 import { AllStats, TrackerData, Unit3DStats, SharewoodStats } from "@/types/tracker";
 import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, RefreshCw, BarChart2, Clock, LogOut, Sun, Moon } from "lucide-react";
 import dynamic from "next/dynamic";
+import RefreshButton from "@/components/RefreshButton";
+import LastUpdateInfo from "@/components/LastUpdateInfo";
 
 // Dynamically import Chart to avoid SSR issues
 const TrackerChart = dynamic(() => import("@/components/charts/TrackerChart"), {
@@ -61,12 +63,15 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-dark">
+      <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 flex-1">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-black dark:text-white">
           Tracker Stats
         </h1>
         <div className="flex items-center gap-3">
+          <RefreshButton />
+
           <button
             onClick={toggleTheme}
             className="flex items-center justify-center w-8 h-8 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -119,6 +124,10 @@ export default function Home() {
           </div>
         </>
       )}
+      </div>
+      <footer className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 w-full">
+        <LastUpdateInfo />
+      </footer>
     </div>
   );
 }
