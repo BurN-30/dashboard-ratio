@@ -33,13 +33,10 @@ def fetch_local_stats():
         response = requests.get(LOCAL_API_URL, headers=headers, timeout=1)
         if response.status_code == 200:
             return response.json()
-<<<<<<< HEAD
-        else:
-            print(f"API Error {response.status_code}: {response.text}")
-=======
         elif response.status_code == 401:
             print("Error: Unauthorized (Check HWMONITOR_TOKEN)")
->>>>>>> 48dee41ef2c78ff4e8d5f7def0249f4235378fa0
+        else:
+            print(f"API Error {response.status_code}: {response.text}")
     except Exception as e:
         print(f"Error fetching local stats: {e}")
     return None
