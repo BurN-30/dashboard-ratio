@@ -46,7 +46,8 @@ interface UseHardwareStatsOptions {
 export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const {
     interval = 2000,
-    apiUrl = '/api/hardware/stats',
+    // Utilise le proxy Ngrok par défaut
+    apiUrl = 'https://submedial-bloodlike-sarah.ngrok-free.dev/hardware-proxy',
   } = options;
 
   const [stats, setStats] = useState<HardwareStats | null>(null);
@@ -56,9 +57,10 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const headers: HeadersInit = {};
+      const headers: HeadersInit = {
+        'ngrok-skip-browser-warning': 'true',
+      };
       const token = process.env.NEXT_PUBLIC_HWMONITOR_TOKEN;
-      
       if (token) {
         headers['X-Api-Key'] = token;
       }
