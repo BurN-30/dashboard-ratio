@@ -91,6 +91,7 @@ export default function HardwareMonitorTabs() {
             <button
               onClick={manualRefresh}
               disabled={loading}
+              aria-label="Refresh"
               className="p-2 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
             >
               <RefreshCw
