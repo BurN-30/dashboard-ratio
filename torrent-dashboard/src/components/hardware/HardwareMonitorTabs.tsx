@@ -32,7 +32,7 @@ export default function HardwareMonitorTabs() {
       interval: 2000,
       apiUrl:
         process.env.NEXT_PUBLIC_HWMONITOR_API ||
-        'http://localhost:5056/api/stats',
+        '/api/hardware/stats',
     });
 
   const getCpuColor = (load: number) => {

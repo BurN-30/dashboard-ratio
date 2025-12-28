@@ -11,7 +11,7 @@ import NetworkStats from '@/components/hardware/NetworkStats';
 export default function HardwareMonitor() {
   const { stats, loading, error, isPolling, togglePolling, manualRefresh } = useHardwareStats({
     interval: 2000, // Refresh every 2 seconds
-    apiUrl: process.env.NEXT_PUBLIC_HWMONITOR_API || 'http://localhost:5056/api/stats',
+    apiUrl: process.env.NEXT_PUBLIC_HWMONITOR_API || '/api/hardware/stats',
   });
 
   const [mounted, setMounted] = useState(false);
