@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Response
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import subprocess
 import os
@@ -60,6 +61,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Add CORS middleware to allow all origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 # --- ROUTES API ---
 @app.get("/hardware-proxy")
