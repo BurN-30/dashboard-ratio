@@ -39,20 +39,17 @@ start /B "HW Monitor API" dotnet run --project "%PROJECT_DIR%" --urls "http://0.
 :: Pause de 10s pour laisser le temps à l'API .NET de démarrer
 timeout /t 10 >nul
 
-:: 4. LANCEMENT DU PUSHER FTP (Python)
-echo [4/5] Lancement Pusher FTP (Hardware)...
 
-:: Detection automatique du script pusher
-set "PUSHER_SCRIPT=hw_pusher.py"
-if exist "Partie Dahboard Ratio\hw_pusher.py" set "PUSHER_SCRIPT=Partie Dahboard Ratio\hw_pusher.py"
-
-if not exist "%PUSHER_SCRIPT%" (
-    echo [ERREUR] Le script "%PUSHER_SCRIPT%" est introuvable !
-    pause
-    exit /b 1
-)
-
-start /B "HW Pusher" python "%PUSHER_SCRIPT%"
+:: 4. PUSHER FTP désactivé (obsolète, remplacé par Proxy API)
+:: echo [4/5] Lancement Pusher FTP (Hardware)...
+:: set "PUSHER_SCRIPT=hw_pusher.py"
+:: if exist "Partie Dahboard Ratio\hw_pusher.py" set "PUSHER_SCRIPT=Partie Dahboard Ratio\hw_pusher.py"
+:: if not exist "%PUSHER_SCRIPT%" (
+::     echo [ERREUR] Le script "%PUSHER_SCRIPT%" est introuvable !
+::     pause
+::     exit /b 1
+:: )
+:: start /B "HW Pusher" python "%PUSHER_SCRIPT%"
 
 :: 5. LANCEMENT DU SERVEUR PRINCIPAL (Trigger Scraping)
 echo [5/5] Lancement Serveur Trigger (Boucle)...
