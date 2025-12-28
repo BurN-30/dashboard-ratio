@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Header, BackgroundTasks
+from contextlib import asynccontextmanager
 import subprocess
 import os
 import sys
@@ -6,26 +7,21 @@ import threading
 import time
 from datetime import datetime
 
-app = FastAPI()
-
 # --- CONFIGURATION ---
 SECRET_TOKEN = os.getenv("TRIGGER_TOKEN", "301101230669")
-SCRAPE_INTERVAL_HOURS = 6  # Fréquence automatique
-
-# Verrou global
+SCRAPE_INTERVAL_HOURS = 6
 is_scraping_running = False
 
+# --- LOGIQUE SCRAPER ---
 def run_scraper_logic(source="Auto"):
     global is_scraping_running
-    
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    script_path = os.path.join(base_dir, "scraper.py")
     
-    print(f"[{datetime.now()}] 🔒 Verrou activé. Lancement ({source}) : {script_path}")
+    print(f"[{datetime.now()}] 🔒 Verrou activé. Lancement ({source})")
     
     try:
-        # Force l'UTF-8 pour éviter les crashs émojis
-        result = subprocess.run(
+        # Lancement du scraper en sous-processus
+        subprocess.run(
             [sys.executable, "scraper.py"], 
             cwd=base_dir,
             capture_output=True, 
@@ -41,22 +37,28 @@ def run_scraper_logic(source="Auto"):
         is_scraping_running = False
         print("🔓 Verrou libéré.")
 
-# --- TÂCHE DE FOND : BOUCLE 6 HEURES ---
+# --- TÂCHE DE FOND (THREAD) ---
 def scheduled_loop():
     print(f"⏰ Planificateur démarré : Scraping toutes les {SCRAPE_INTERVAL_HOURS}h.")
     while True:
-        # On attend 6h (en secondes)
+        # Attente initiale de 6h pour ne pas bloquer le démarrage
         time.sleep(SCRAPE_INTERVAL_HOURS * 3600)
         if not is_scraping_running:
             run_scraper_logic(source="Timer 6h")
 
-# Lancement du thread parallèle au démarrage
-@app.on_event("startup")
-def start_schedule():
+# --- NOUVELLE GESTION DU DÉMARRAGE (Lifespan) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Ce code s'exécute au démarrage
     thread = threading.Thread(target=scheduled_loop, daemon=True)
     thread.start()
+    yield
+    # Ce code s'exécute à l'arrêt (optionnel)
+    print("🛑 Arrêt du serveur.")
 
-# --- API VERCEL ---
+app = FastAPI(lifespan=lifespan)
+
+# --- ROUTES API ---
 @app.post("/run-scraper")
 async def trigger_scraper(background_tasks: BackgroundTasks, x_token: str = Header(None)):
     global is_scraping_running
@@ -71,4 +73,5 @@ async def trigger_scraper(background_tasks: BackgroundTasks, x_token: str = Head
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # On utilise le port 8888 qui est beaucoup moins capricieux que 8010/8011
+    uvicorn.run(app, host="0.0.0.0", port=8888)
