@@ -17,10 +17,7 @@ FTP_HOST = os.getenv("FTP_HOST")
 FTP_USER = os.getenv("FTP_USER")
 FTP_PASS = os.getenv("FTP_PASS")
 FTP_DIR  = os.getenv("FTP_DIR")
-<<<<<<< HEAD
 # Token pour l'API locale (doit correspondre à celui défini dans start_server.bat)
-=======
->>>>>>> 48dee41ef2c78ff4e8d5f7def0249f4235378fa0
 HWMONITOR_TOKEN = os.getenv("HWMONITOR_TOKEN")
 
 LOCAL_API_URL = "http://localhost:5056/api/stats"
