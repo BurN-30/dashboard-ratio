@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useToast } from '@/context/ToastContext';
 
@@ -8,14 +8,31 @@ export default function RefreshButton() {
   const [isLoading, setIsLoading] = useState(false);
   const { showToast } = useToast();
 
+  // Stocker le dernier timestamp connu pour comparaison
+  const lastTimestampRef = useRef<number | null>(null);
+
+  const getCurrentTimestamp = async () => {
+    try {
+      const res = await fetch('/api/stats', { cache: 'no-store' });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data._timestamp || null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleRefresh = async () => {
     if (isLoading) return;
     setIsLoading(true);
 
+    // Récupérer le timestamp actuel avant refresh
+    if (lastTimestampRef.current === null) {
+      lastTimestampRef.current = await getCurrentTimestamp();
+    }
+
     // Notification immédiate : scraper en cours
     showToast('Scraper en cours...', 'success', 5000);
-    
-    // Trigger polling sur la page
     window.dispatchEvent(new Event('refresh-clicked'));
 
     try {
@@ -28,8 +45,29 @@ export default function RefreshButton() {
           'error',
           5000
         );
+        setIsLoading(false);
+        return;
       }
-      // Si succès, on affiche "lancé" — les données seront à jour dans la page parent
+
+      // Attendre que le timestamp change (max 15s)
+      let tries = 0;
+      const maxTries = 30; // 30 x 500ms = 15s
+      let newTimestamp = null;
+      while (tries < maxTries) {
+        newTimestamp = await getCurrentTimestamp();
+        if (
+          newTimestamp &&
+          lastTimestampRef.current &&
+          newTimestamp !== lastTimestampRef.current
+        ) {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 500));
+        tries++;
+      }
+      lastTimestampRef.current = newTimestamp;
+
+      showToast('Mise à jour terminée !', 'success', 4000);
     } catch (error) {
       showToast(
         'Serveur inaccessible — vérifiez votre PC',
