@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Header, BackgroundTasks, Response
 from contextlib import asynccontextmanager
 import subprocess
 import os
@@ -6,6 +6,20 @@ import sys
 import threading
 import time
 from datetime import datetime
+import requests
+# --- ROUTES API ---
+@app.get("/hardware-proxy")
+async def hardware_proxy():
+    """
+    Proxy temps réel vers l'API .NET locale (http://localhost:5056/api/stats)
+    Timeout court (2s). Renvoie le JSON tel quel.
+    """
+    try:
+        resp = requests.get("http://localhost:5056/api/stats", timeout=2)
+        resp.raise_for_status()
+        return Response(content=resp.content, media_type="application/json")
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"Erreur proxy: {e}")
 
 # --- CONFIGURATION ---
 SECRET_TOKEN = os.getenv("TRIGGER_TOKEN", "301101230669")
