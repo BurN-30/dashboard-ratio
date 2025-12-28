@@ -79,7 +79,11 @@ async def hardware_proxy():
     Timeout court (2s). Renvoie le JSON tel quel.
     """
     try:
-        resp = requests.get("http://localhost:5056/api/stats", timeout=2)
+        resp = requests.get(
+            "http://localhost:5056/api/stats",
+            timeout=2,
+            headers={"x-token": SECRET_TOKEN},
+        )
         resp.raise_for_status()
         return Response(content=resp.content, media_type="application/json")
     except requests.RequestException as e:
