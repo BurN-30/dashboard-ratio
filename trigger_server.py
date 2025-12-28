@@ -7,6 +7,7 @@ import threading
 import time
 from datetime import datetime
 import requests
+import json
 
 # --- CONFIGURATION ---
 SECRET_TOKEN = os.getenv("TRIGGER_TOKEN", "301101230669")
@@ -86,6 +87,28 @@ async def trigger_scraper(background_tasks: BackgroundTasks, x_token: str = Head
     is_scraping_running = True
     background_tasks.add_task(run_scraper_logic, source="Vercel")
     return {"status": "launched", "message": "Scraper lancé."}
+
+@app.get("/torrent/stats")
+async def get_torrent_stats():
+    try:
+        with open("stats.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="stats.json not found")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to decode stats.json")
+
+@app.get("/torrent/history")
+async def get_torrent_history():
+    try:
+        with open("history.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="history.json not found")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to decode history.json")
 
 if __name__ == "__main__":
     import uvicorn
