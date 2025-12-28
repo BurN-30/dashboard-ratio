@@ -18,14 +18,7 @@ const nextConfig: NextConfig = {
         },
       },
     },
-  async rewrites() {
-    return [
-      {
-        source: '/api/hardware/:path*',
-        destination: 'http://localhost:5056/api/:path*',
-      },
-    ];
-  },
+  
 };
 
 export default nextConfig;
