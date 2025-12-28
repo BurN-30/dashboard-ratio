@@ -6,11 +6,16 @@ export async function GET() {
     const base = process.env.JSON_BASE_URL || 'https://example.com/dash';
     const url = `${base.replace(/\/$/, '')}/hardware.json`;
 
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: {
+        'ngrok-skip-browser-warning': 'true',
+      },
+    });
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: 'Failed to fetch hardware data', url, status: res.status }, 
+        { error: 'Failed to fetch hardware data', url, status: res.status },
         { status: res.status }
       );
     }
@@ -20,7 +25,7 @@ export async function GET() {
   } catch (error) {
     console.error('[/api/hardware/stats] Fetch error:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error', details: String(error) }, 
+      { error: 'Internal Server Error', details: String(error) },
       { status: 500 }
     );
   }
