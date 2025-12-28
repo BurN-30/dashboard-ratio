@@ -37,3 +37,4 @@ obj/
 
 # Fichiers de configuration locaux .NET
 appsettings.Development.json
+hardware.json
