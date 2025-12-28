@@ -46,7 +46,7 @@ interface UseHardwareStatsOptions {
 export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const {
     interval = 2000,
-    apiUrl = 'http://localhost:5056/api/stats',
+    apiUrl = '/api/hardware/stats',
   } = options;
 
   const [stats, setStats] = useState<HardwareStats | null>(null);
