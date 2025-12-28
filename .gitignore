@@ -11,6 +11,7 @@ venv/
 # Data
 stats.json
 history.json
+hardware.json
 
 # HTML Dumps (fichiers temporaires)
 *.html
