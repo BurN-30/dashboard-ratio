@@ -18,6 +18,7 @@ import {
   TableIcon,
   UserCircleIcon,
 } from "../icons/index";
+import { Zap } from "lucide-react";
 import SidebarWidget from "./SidebarWidget";
 
 type NavItem = {
@@ -32,6 +33,11 @@ const navItems: NavItem[] = [
     icon: <GridIcon />,
     name: "Dashboard",
     path: "/",
+  },
+  {
+    icon: <Zap className="w-5 h-5" />,
+    name: "Hardware Monitor",
+    path: "/hardware-monitor",
   },
   {
     icon: <BoxCubeIcon />,
