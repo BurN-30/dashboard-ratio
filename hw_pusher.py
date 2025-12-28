@@ -52,7 +52,12 @@ def upload_to_ftp(data):
             ftp.cwd(FTP_DIR)
             with open(OUTPUT_FILE, 'rb') as f:
                 ftp.storbinary(f'STOR {OUTPUT_FILE}', f)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Uploaded {OUTPUT_FILE}")
+            # Changer les permissions du fichier en 644 (lecture publique)
+            try:
+                ftp.sendcmd(f'SITE CHMOD 644 {OUTPUT_FILE}')
+            except Exception as chmod_err:
+                print(f"Warning: Impossible de changer les permissions (chmod) : {chmod_err}")
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Uploaded {OUTPUT_FILE} (chmod 644)")
     except Exception as e:
         print(f"FTP Error: {e}")
 
