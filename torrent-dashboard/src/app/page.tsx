@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "@/context/ThemeContext";
@@ -48,7 +48,7 @@ export default function Home() {
   };
 
   // Polling pour détecter quand les données changent après refresh
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     if (isPolling) return;
     setIsPolling(true);
     let attempts = 0;
@@ -81,7 +81,7 @@ export default function Home() {
     };
 
     poll();
-  };
+  }, [isPolling, lastTimestamp, showToast]);
 
   useEffect(() => {
     loadData();
@@ -99,7 +99,7 @@ export default function Home() {
 
     window.addEventListener('refresh-clicked', handleRefreshClick);
     return () => window.removeEventListener('refresh-clicked', handleRefreshClick);
-  }, [lastTimestamp]);
+  }, [startPolling]);
 
   if (loading) {
     return (

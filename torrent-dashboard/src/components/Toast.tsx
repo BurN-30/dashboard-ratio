@@ -42,6 +42,7 @@ export default function Toast({ message, type, duration = 3000, onClose }: Toast
           setIsVisible(false);
           setTimeout(onClose, 300);
         }}
+        aria-label="Close"
         className="ml-2 text-current hover:opacity-70 transition-opacity"
       >
         <X className="w-4 h-4" />
