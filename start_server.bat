@@ -22,7 +22,6 @@ start /B ngrok http --domain=submedial-bloodlike-sarah.ngrok-free.dev 8000 >nul 
 :: 3. LANCEMENT DU MONITORING HARDWARE (.NET)
 echo [3/5] Lancement API Hardware (.NET)...
 :: On lance le projet .NET en arrière-plan. 
-:: Note : Au premier lancement, cela peut prendre du temps (compilation).
 start /B "HW Monitor API" dotnet run --project "hwMonitor" --urls "http://0.0.0.0:5056"
 
 :: Pause de 10s pour laisser le temps à l'API .NET de démarrer
