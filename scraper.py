@@ -1,6 +1,5 @@
 import json
 import time
-import ftplib
 import os
 import re
 from datetime import datetime
@@ -18,12 +17,6 @@ load_dotenv()
 # --- CONFIGURATION FICHIER ---
 OUTPUT_FILE = "stats.json"
 HISTORY_FILE = "history.json"
-
-# --- CONFIGURATION FTP O2SWITCH ---
-FTP_HOST = os.getenv("FTP_HOST")
-FTP_USER = os.getenv("FTP_USER")
-FTP_PASS = os.getenv("FTP_PASS")
-FTP_DIR  = os.getenv("FTP_DIR")
 
 # --- CONFIGURATION SITES ---
 SITES = [
@@ -228,38 +221,6 @@ def scrape_unit3d(page, site_name):
     
     return data
 
-def upload_to_ftp():
-    try:
-        session = ftplib.FTP(FTP_HOST, FTP_USER, FTP_PASS)
-        # session.set_debuglevel(1) 
-        
-        # Navigation vers le dossier
-        try:
-            session.cwd(FTP_DIR)
-        except:
-            print(f"⚠️ Le dossier {FTP_DIR} n'existe pas. Tentative de création...")
-            try:
-                session.mkd(FTP_DIR)
-                session.cwd(FTP_DIR)
-            except Exception as e:
-                print(f"❌ Impossible de créer/accéder au dossier {FTP_DIR}: {e}")
-                session.quit()
-                return
-
-        # Upload stats.json
-        with open(OUTPUT_FILE, 'rb') as file:
-            session.storbinary(f'STOR {OUTPUT_FILE}', file)
-            
-        # Upload history.json
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, 'rb') as file:
-                session.storbinary(f'STOR {HISTORY_FILE}', file)
-        
-        session.quit()
-        print(f"✅ SUCCÈS : Données accessibles sur https://dash.example.com/stats.json")
-    except Exception as e:
-        print(f"❌ Erreur FTP critique : {e}")
-
 def clean_history(history):
     """
     Optimise l'historique pour ne pas qu'il grossisse indéfiniment.
@@ -293,7 +254,7 @@ def clean_history(history):
 
 def main():
     final_data = {}
-    
+
     # 1. SCRAPING
     print("--- 🕷️ Démarrage du scraping ---")
     with sync_playwright() as p:
@@ -357,9 +318,6 @@ def main():
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, indent=4, ensure_ascii=False)
     print(f"💾 Fichier {HISTORY_FILE} mis à jour ({len(history)} entrées).")
-
-    # 3. ENVOI FTP
-    upload_to_ftp()
 
 if __name__ == "__main__":
     main()
