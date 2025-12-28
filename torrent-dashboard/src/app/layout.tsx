@@ -19,7 +19,10 @@ export default function RootLayout({
       <head>
         <meta name="robots" content="noindex, nofollow" />
       </head>
-      <body className={`${outfit.className} dark:bg-boxdark-2 dark:text-white`}>
+      <body
+        suppressHydrationWarning
+        className={`${outfit.className} dark:bg-boxdark-2 dark:text-white`}
+      >
         <ThemeProvider>
           <ToastProvider>
             <SidebarProvider>{children}</SidebarProvider>

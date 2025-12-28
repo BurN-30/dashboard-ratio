@@ -20,3 +20,19 @@ history.json
 node_modules/
 .next/
 .DS_Store
+
+# .NET / C# (hwMonitor)
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.pdb
+*.cache
+*.dll
+# Bloquer les exécutables et installateurs
+*.exe
+*.msi
+
+# Fichiers de configuration locaux .NET
+appsettings.Development.json
