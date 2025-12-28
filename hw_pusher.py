@@ -17,10 +17,7 @@ FTP_HOST = REDACTED"FTP_HOST")
 FTP_USER = REDACTED"FTP_USER")
 FTP_PASS = REDACTED"FTP_PASS")
 FTP_DIR  = REDACTED"FTP_DIR")
-<<<<<<< HEAD
 # Token pour l'API locale (doit correspondre à celui défini dans start_server.bat)
-=======
->>>>>>> 48dee41ef2c78ff4e8d5f7def0249f4235378fa0
 HWMONITOR_TOKEN = REDACTED"HWMONITOR_TOKEN")
 
 LOCAL_API_URL = "http://localhost:5056/api/stats"
