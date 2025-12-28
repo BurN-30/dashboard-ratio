@@ -2,8 +2,11 @@ import { AllStats } from "@/types/tracker";
 
 export async function fetchTorrentStats(): Promise<AllStats | null> {
   try {
-    const response = await fetch("/api/stats", {
+    const response = await fetch("https://submedial-bloodlike-sarah.ngrok-free.dev/torrent/stats", {
       cache: "no-store",
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
     });
 
     if (!response.ok) {
@@ -21,8 +24,11 @@ export async function fetchTorrentStats(): Promise<AllStats | null> {
 
 export async function fetchTorrentHistory(): Promise<AllStats[] | null> {
   try {
-    const response = await fetch("/api/history", {
+    const response = await fetch("https://submedial-bloodlike-sarah.ngrok-free.dev/torrent/history", {
       cache: "no-store",
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
     });
 
     if (!response.ok) {
