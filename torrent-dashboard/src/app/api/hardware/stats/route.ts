@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // Use env var if provided, otherwise fall back to the public O2Switch path
-    const base = process.env.JSON_BASE_URL || 'https://example.com/dash';
-    const url = `${base.replace(/\/$/, '')}/hardware.json`;
+    // 1. ON FORCE L'URL NGROK (On ignore la variable d'env Vercel pour l'instant)
+    // Remplace l'URL ci-dessous par ton URL Ngrok actuelle si elle a changé
+    const url = 'https://submedial-bloodlike-sarah.ngrok-free.dev/hardware-proxy';
 
+    // 2. On appelle le Python via le tunnel avec le Sésame
     const res = await fetch(url, {
       cache: 'no-store',
       headers: {
@@ -15,7 +16,7 @@ export async function GET() {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: 'Failed to fetch hardware data', url, status: res.status },
+        { error: `Erreur distante: ${res.status}` },
         { status: res.status }
       );
     }
@@ -23,7 +24,7 @@ export async function GET() {
     const data = await res.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('[/api/hardware/stats] Fetch error:', error);
+    console.error('Hardware Proxy Error:', error);
     return NextResponse.json(
       { error: 'Internal Server Error', details: String(error) },
       { status: 500 }
