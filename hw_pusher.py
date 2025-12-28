@@ -17,6 +17,7 @@ FTP_HOST = os.getenv("FTP_HOST")
 FTP_USER = os.getenv("FTP_USER")
 FTP_PASS = os.getenv("FTP_PASS")
 FTP_DIR  = os.getenv("FTP_DIR")
+HWMONITOR_TOKEN = os.getenv("HWMONITOR_TOKEN")
 
 LOCAL_API_URL = "http://localhost:5056/api/stats"
 OUTPUT_FILE = "hardware.json"
@@ -24,9 +25,15 @@ UPLOAD_INTERVAL = 2 # seconds
 
 def fetch_local_stats():
     try:
-        response = requests.get(LOCAL_API_URL, timeout=1)
+        headers = {}
+        if HWMONITOR_TOKEN:
+            headers["X-Api-Key"] = HWMONITOR_TOKEN
+            
+        response = requests.get(LOCAL_API_URL, headers=headers, timeout=1)
         if response.status_code == 200:
             return response.json()
+        elif response.status_code == 401:
+            print("Error: Unauthorized (Check HWMONITOR_TOKEN)")
     except Exception as e:
         print(f"Error fetching local stats: {e}")
     return None
