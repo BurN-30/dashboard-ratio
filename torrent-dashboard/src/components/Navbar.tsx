@@ -3,15 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Home, Cpu, Database, Activity } from 'lucide-react';
+import { LayoutDashboard, Cpu, Database, Activity } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: 'Home', href: '/', icon: Home },
+    { name: 'Torrents', href: '/', icon: Database },
     { name: 'Hardware', href: '/hardware-monitor', icon: Cpu },
-    { name: 'Torrents', href: '/torrent-dashboard', icon: Database },
   ];
 
   return (
