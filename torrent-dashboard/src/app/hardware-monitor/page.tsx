@@ -1,267 +1,222 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState, useCallback } from "react";
-// J'ai remis les imports nécessaires pour le style
-import { useToast } from "@/context/ToastContext";
-import { fetchTorrentStats, fetchTorrentHistory } from "@/lib/api";
-import { AllStats, TrackerData, Unit3DStats, SharewoodStats } from "@/types/tracker";
-import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock } from "lucide-react";
-import dynamic from "next/dynamic";
-import RefreshButton from "@/components/RefreshButton";
-import LastUpdateInfo from "@/components/LastUpdateInfo";
-import Navbar from "@/components/Navbar";
+import React from 'react';
+import Navbar from '@/components/Navbar'; // On garde la nav pour circuler
+import { useHardwareStats } from '@/hooks/useHardwareStats';
+import { 
+  Cpu, 
+  MemoryStick, 
+  HardDrive, 
+  Wifi, 
+  Zap, 
+  Server,
+  Activity,
+  ArrowUp,
+  ArrowDown,
+  Thermometer,
+  Wind
+} from 'lucide-react';
 
-const TrackerChart = dynamic(() => import("@/components/charts/TrackerChart"), {
-  ssr: false,
-});
+// === COMPOSANTS STYLE "TORRENT DASHBOARD" ===
 
-export default function Home() {
-  const [stats, setStats] = useState<AllStats | null>(null);
-  const [history, setHistory] = useState<AllStats[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
-  const { showToast } = useToast();
+// Carte standard (Fond blanc en light, Gris foncé en dark)
+const DashboardCard = ({ title, icon: Icon, children, className = "" }: any) => (
+  <div className={`rounded-sm border border-gray-200 bg-white p-6 shadow-theme-md dark:border-gray-700 dark:bg-gray-800 ${className}`}>
+    <div className="flex items-center justify-between mb-4">
+      <h4 className="text-xl font-bold text-black dark:text-white flex items-center gap-2">
+        {Icon && <Icon className="w-5 h-5 text-brand-500" />}
+        {title}
+      </h4>
+    </div>
+    {children}
+  </div>
+);
 
-  // Fonction pour recharger les données
-  const loadData = async () => {
-    const [currentData, historyData] = await Promise.all([
-      fetchTorrentStats(),
-      fetchTorrentHistory(),
-    ]);
-    setStats(currentData);
-    setHistory(historyData);
-    if (currentData && currentData._timestamp) {
-      setLastTimestamp(currentData._timestamp);
-    }
-    setLoading(false);
-  };
-
-  // Polling pour détecter quand les données changent après refresh
-  const startPolling = useCallback(() => {
-    if (isPolling) return;
-    setIsPolling(true);
-    let attempts = 0;
-    const maxAttempts = 15;
-
-    const poll = async () => {
-      attempts++;
-      try {
-        const newStats = await fetchTorrentStats();
-        if (newStats && newStats._timestamp && newStats._timestamp !== lastTimestamp) {
-          setStats(newStats);
-          setLastTimestamp(newStats._timestamp);
-          setIsPolling(false);
-          showToast('Données mises à jour !', 'success', 4000);
-          return;
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-
-      if (attempts >= maxAttempts) {
-        setIsPolling(false);
-        showToast('Timeout — scraper peut encore être en cours', 'error', 3000);
-        return;
-      }
-      setTimeout(poll, 2000);
-    };
-
-    poll();
-  }, [isPolling, lastTimestamp, showToast]);
-
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const handleRefreshClick = () => {
-      startPolling();
-    };
-    window.addEventListener('refresh-clicked', handleRefreshClick);
-    return () => window.removeEventListener('refresh-clicked', handleRefreshClick);
-  }, [startPolling]);
-
-  if (loading) {
-    return (
-      // Restauration du fond dynamique pour le loading
-      <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-gray-950">
-        <div className="h-16 w-16 animate-spin rounded-full border-4 border-solid border-brand-500 border-t-transparent"></div>
+// Ligne de stat simple
+const StatRow = ({ label, value, subValue, icon: Icon, alert = false }: any) => (
+  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
+    <span className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+      {Icon && <Icon className="w-4 h-4 text-gray-400" />}
+      {label}
+    </span>
+    <div className="text-right">
+      <div className={`text-sm font-bold ${alert ? "text-red-500 animate-pulse" : "text-black dark:text-white"}`}>
+        {value}
       </div>
-    );
-  }
+      {subValue && <div className="text-xs text-gray-500">{subValue}</div>}
+    </div>
+  </div>
+);
 
-  if (!stats) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-gray-950">
-        <p className="text-xl text-error-500">Failed to load data.</p>
-      </div>
-    );
-  }
-
+// Barre de progression simple
+const ProgressBar = ({ value, max = 100, color = "bg-blue-500", label }: any) => {
+  const percent = Math.min((value / max) * 100, 100);
   return (
-    // FIX ICI : Utilisation de classes dynamiques (bg-gray-100 pour light, bg-gray-950 pour dark)
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-950 text-black dark:text-white transition-colors duration-300">
-      <Navbar />
-      
-      <main className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-black dark:text-white">
-            Tracker Stats
-          </h1>
-          <div className="flex items-center gap-3">
-            <RefreshButton />
-            {/* Si tes boutons Logout/Theme ne sont pas dans la Navbar, il faut les remettre ici */}
-          </div>
-        </div>
-        
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 xl:grid-cols-3 2xl:gap-7.5 mb-10">
-          {Object.entries(stats)
-            .filter(([name]) => name !== "_timestamp")
-            .map(([name, data]) => (
-              <TrackerCard key={name} name={name} data={data as TrackerData} />
-            ))}
-        </div>
-
-        {/* Charts */}
-        {history && history.length > 0 && (
-          <>
-            <h2 className="mb-6 text-xl font-bold text-black dark:text-white">
-              Ratio History
-            </h2>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-               {Object.keys(stats)
-                 .filter((name) => name !== "_timestamp")
-                 .map((name) => (
-                  <div key={name} className="col-span-1">
-                     <TrackerChart trackerName={name} history={history} />
-                  </div>
-               ))}
-            </div>
-          </>
-        )}
-        <footer className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10 mt-auto">
-          <LastUpdateInfo />
-        </footer>
-      </main>
+    <div className="mb-3">
+      <div className="flex justify-between text-xs mb-1">
+        <span className="text-gray-500 font-medium">{label}</span>
+        <span className="text-black dark:text-white font-bold">{value.toFixed(0)}%</span>
+      </div>
+      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+        <div 
+          className={`h-2.5 rounded-full transition-all duration-500 ${color}`} 
+          style={{ width: `${percent}%` }}
+        ></div>
+      </div>
     </div>
   );
-}
+};
 
-function TrackerCard({ name, data }: { name: string; data: TrackerData }) {
-  const getStats = (d: TrackerData) => {
-    const isSharewood = name === 'Sharewood';
-    if (!isSharewood) {
-      const u = d as Unit3DStats;
-      return {
-        ratio: u.ratio,
-        seed_count: u.count_seed,
-        buffer: u.buffer,
-        points: u.points_bonus,
-        upload: u.vol_upload,
-        download: u.vol_download,
-        seed_time_total: u.seed_time_total,
-        seed_time_avg: u.seed_time_avg,
-        download_count: u.count_downloaded
-      };
-    } else {
-      const s = d as SharewoodStats;
-      return {
-        ratio: s.ratio,
-        seed_count: s.count_seed,
-        buffer: s.buffer,
-        points: s.points_bonus,
-        upload: s.vol_upload,
-        download: s.vol_download,
-        seed_time_total: s.time_seed_total,
-        seed_time_avg: s.time_seed_avg,
-        download_count: s.count_download
-      };
-    }
+export default function HardwareMonitor() {
+  const { stats, loading, error } = useHardwareStats({ interval: 2000 });
+
+  if (loading && !stats) return <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-gray-900"><div className="animate-spin h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>;
+  if (error) return <div className="flex h-screen items-center justify-center text-red-500">Erreur: {error}</div>;
+
+  // Sécurisation des données
+  const safeStats = stats || {
+    cpuName: 'N/A', cpuLoad: 0, cpuTemp: 0, cpuPower: 0, cpuFanSpeed: 0,
+    ramUsedPercent: 0, ramUsed: 0, ramTotal: 0,
+    network: { downloadSpeed: 0, uploadSpeed: 0 },
+    gpus: [], drives: [], topProcesses: [],
+    osName: '', uptime: ''
   };
 
-  const stats = getStats(data);
-  const ratio = Number(stats.ratio) || 0;
+  const isCpuHot = safeStats.cpuTemp > 80;
 
   return (
-    // FIX ICI : Retour au style adaptatif (Blanc en light mode, Sombre en dark mode)
-    <div className="rounded-sm border border-gray-200 bg-white p-6 shadow-theme-md dark:border-gray-800 dark:bg-gray-900 transition-colors duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <h4 className="text-xl font-bold text-black dark:text-white">
-          {name}
-        </h4>
-        <span className={`px-3 py-1 rounded-full text-sm font-bold ${ratio >= 1 ? 'bg-success-500/10 text-success-500' : 'bg-error-500/10 text-error-500'}`}>
-            Ratio: {ratio.toFixed(2)}
-        </span>
-      </div>
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300">
+      <Navbar />
 
-      {/* Primary Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="space-y-1">
-            <p className="text-xs text-gray-500 uppercase">Buffer / Capacité</p>
-            <div className="flex items-center gap-2">
-                <ArrowRightLeft className="w-4 h-4 text-blue-500" />
-                <p className="text-lg font-bold text-black dark:text-white">{stats.buffer}</p>
-            </div>
+      <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        
+        {/* HEADER */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-black dark:text-white">Hardware Monitor</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {safeStats.osName} • Uptime: {safeStats.uptime}
+            </p>
+          </div>
         </div>
-        <div className="space-y-1">
-            <p className="text-xs text-gray-500 uppercase">Points Bonus</p>
-            <div className="flex items-center gap-2">
-                <Coins className="w-4 h-4 text-yellow-500" />
-                <p className="text-lg font-bold text-brand-500">{stats.points}</p>
-            </div>
-        </div>
-        <div className="space-y-1">
-            <p className="text-xs text-gray-500 uppercase">Upload Vol.</p>
-            <div className="flex items-center gap-2">
-                <ArrowUp className="w-4 h-4 text-success-500" />
-                <p className="text-sm font-medium text-black dark:text-white">{stats.upload}</p>
-            </div>
-        </div>
-        <div className="space-y-1">
-            <p className="text-xs text-gray-500 uppercase">Download Vol.</p>
-            <div className="flex items-center gap-2">
-                <ArrowDown className="w-4 h-4 text-error-500" />
-                <p className="text-sm font-medium text-black dark:text-white">{stats.download}</p>
-            </div>
-        </div>
-      </div>
 
-      {/* Super Useful Stats */}
-      <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
-        <h5 className="text-sm font-semibold text-gray-500 mb-3">Activity & Seeding</h5>
-        <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Torrents Seeding</span>
-                <div className="flex items-center gap-2">
-                    <UploadCloud className="w-4 h-4 text-success-500" />
-                    <span className="font-medium text-black dark:text-white">{stats.seed_count}</span>
-                </div>
+        {/* GRILLE PRINCIPALE */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:gap-7.5">
+          
+          {/* 1. CPU CARD */}
+          <DashboardCard title="Processeur" icon={Cpu} className={isCpuHot ? "border-red-500 dark:border-red-500" : ""}>
+            <div className="mb-4">
+              <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-500">
+                {safeStats.cpuName}
+              </span>
             </div>
-            <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Torrents Downloaded</span>
-                <div className="flex items-center gap-2">
-                    <DownloadCloud className="w-4 h-4 text-blue-500" />
-                    <span className="font-medium text-black dark:text-white">{stats.download_count}</span>
-                </div>
+            
+            <ProgressBar label="Charge Totale" value={safeStats.cpuLoad} color={isCpuHot ? "bg-red-500" : "bg-blue-500"} />
+            
+            <div className="mt-4 space-y-1">
+              <StatRow label="Température" value={`${safeStats.cpuTemp.toFixed(1)}°C`} icon={Thermometer} alert={isCpuHot} />
+              <StatRow label="Ventilateur" value={`${safeStats.cpuFanSpeed.toFixed(0)} RPM`} icon={Wind} />
+              <StatRow label="Consommation" value={`${safeStats.cpuPower.toFixed(1)} W`} icon={Zap} />
             </div>
-            <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Total Seed Time</span>
-                <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span className="font-medium text-black dark:text-white">{stats.seed_time_total}</span>
-                </div>
+          </DashboardCard>
+
+          {/* 2. RAM CARD */}
+          <DashboardCard title="Mémoire RAM" icon={MemoryStick}>
+            <div className="mb-6 text-center">
+              <div className="text-3xl font-bold text-black dark:text-white mb-1">
+                {safeStats.ramUsedPercent.toFixed(1)}%
+              </div>
+              <p className="text-sm text-gray-500">
+                {safeStats.ramUsed.toFixed(1)} Go / {safeStats.ramTotal.toFixed(1)} Go
+              </p>
             </div>
-            <div className="flex justify-between text-sm">
-                <span className="text-gray-500 dark:text-gray-400">Avg Seed Time</span>
-                <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span className="font-medium text-black dark:text-white">{stats.seed_time_avg}</span>
-                </div>
+            <ProgressBar label="Utilisation" value={safeStats.ramUsedPercent} color="bg-purple-500" />
+            
+            {/* Top Process List inside RAM Card */}
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+              <h5 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                <Activity size={14} /> Top Consommateurs
+              </h5>
+              <div className="space-y-2">
+                {safeStats.topProcesses && safeStats.topProcesses.length > 0 ? (
+                   safeStats.topProcesses.slice(0, 3).map((proc: any) => (
+                    <div key={proc.id} className="flex justify-between text-xs">
+                      <span className="text-gray-600 dark:text-gray-400 truncate w-32">{proc.name}</span>
+                      <span className="font-mono font-bold text-purple-500">{proc.memoryUsedMb.toFixed(0)} Mo</span>
+                    </div>
+                   ))
+                ) : <span className="text-xs text-gray-400">Chargement...</span>}
+              </div>
             </div>
+          </DashboardCard>
+
+          {/* 3. NETWORK CARD */}
+          <DashboardCard title="Réseau" icon={Wifi}>
+            <div className="grid grid-cols-2 gap-4 text-center mb-6">
+              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <ArrowDown className="w-6 h-6 text-green-500 mx-auto mb-2" />
+                <div className="text-xl font-bold text-black dark:text-white">
+                  {safeStats.network.downloadSpeed.toFixed(1)}
+                </div>
+                <div className="text-xs text-gray-500">Mbps Down</div>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <ArrowUp className="w-6 h-6 text-blue-500 mx-auto mb-2" />
+                <div className="text-xl font-bold text-black dark:text-white">
+                  {safeStats.network.uploadSpeed.toFixed(1)}
+                </div>
+                <div className="text-xs text-gray-500">Mbps Up</div>
+              </div>
+            </div>
+            <div className="text-xs text-center text-gray-400">
+              Surveillance en temps réel
+            </div>
+          </DashboardCard>
+
+          {/* 4. GPU CARDS (Mapping dynamique) */}
+          {safeStats.gpus.map((gpu: any, idx: number) => (
+            <DashboardCard key={idx} title={`GPU ${idx + 1}`} icon={Server}>
+              <div className="mb-4">
+                 <span className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-500 truncate block">
+                  {gpu.name}
+                </span>
+              </div>
+              <ProgressBar label="Charge Core" value={gpu.load || 0} color="bg-orange-500" />
+              
+              <div className="mt-2 space-y-1">
+                 <StatRow label="Température" value={`${(gpu.temperature || 0).toFixed(0)}°C`} icon={Thermometer} />
+                 <StatRow label="Ventilateur" value={`${(gpu.fanSpeed || 0).toFixed(0)}%`} icon={Wind} />
+                 <StatRow 
+                    label="VRAM" 
+                    value={`${(gpu.memoryUsed || 0).toFixed(0)} Mo`} 
+                    subValue={`sur ${(gpu.memoryTotal || 0).toFixed(0)} Mo`} 
+                 />
+              </div>
+            </DashboardCard>
+          ))}
+
+          {/* 5. STORAGE CARD */}
+          <DashboardCard title="Stockage" icon={HardDrive}>
+            <div className="space-y-4">
+              {safeStats.drives.map((drive: any, idx: number) => (
+                <div key={idx}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="font-bold text-gray-700 dark:text-gray-300">{drive.mount || "Disk"}</span>
+                    <span className="text-gray-500">
+                      {(drive.usedSpace || 0).toFixed(0)} Go / {(drive.totalSpace || 0).toFixed(0)} Go
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full ${drive.usedPercent > 90 ? 'bg-red-500' : 'bg-green-500'}`} 
+                      style={{ width: `${drive.usedPercent || 0}%` }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DashboardCard>
+
         </div>
       </div>
     </div>
