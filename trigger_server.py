@@ -82,7 +82,7 @@ async def hardware_proxy():
         resp = requests.get(
             "http://localhost:5056/api/stats",
             timeout=2,
-            headers={"x-token": SECRET_TOKEN},
+            headers={"X-Api-Key": SECRET_TOKEN},
         )
         resp.raise_for_status()
         return Response(content=resp.content, media_type="application/json")
