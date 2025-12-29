@@ -1,57 +1,311 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Navbar from '@/components/Navbar';
 import { useHardwareStats } from '@/hooks/useHardwareStats';
-import CircularGauge from '@/components/hardware/CircularGauge';
-import StorageBar from '@/components/hardware/StorageBar';
-import GpuCard from '@/components/hardware/GpuCard';
+import { 
+  Cpu, 
+  MemoryStick, 
+  HardDrive, 
+  Wifi, 
+  Zap, 
+  Server,
+  ArrowDown,
+  ArrowUp,
+  Activity,
+  Clock,
+  AlertTriangle
+} from 'lucide-react';
+
+// Composant barre de progression
+const ProgressBar = ({ value, color = "bg-blue-500", label, subLabel }: any) => (
+  <div className="w-full mb-3">
+    <div className="flex justify-between text-xs mb-1">
+      <span className="text-gray-400 font-medium">{label}</span>
+      <span className="text-gray-200">{subLabel || `${value.toFixed(1)}%`}</span>
+    </div>
+    <div className="w-full bg-gray-700/50 rounded-full h-2">
+      <div 
+        className={`h-2 rounded-full transition-all duration-500 ${color}`} 
+        style={{ width: `${Math.min(value, 100)}%` }}
+      ></div>
+    </div>
+  </div>
+);
+
+// Composant Carte Statistique Rapide (Haut de page)
+const StatCard = ({ icon: Icon, title, value, subtext, color }: any) => (
+  <div className="bg-gray-800/80 border border-gray-700/50 p-4 rounded-xl flex items-center space-x-4 hover:bg-gray-800 transition-colors">
+    <div className={`p-3 rounded-lg bg-gray-700/30 ${color}`}>
+      <Icon size={24} />
+    </div>
+    <div>
+      <p className="text-gray-400 text-xs uppercase font-bold tracking-wider">{title}</p>
+      <h3 className="text-xl font-bold text-white">{value}</h3>
+      {subtext && <p className="text-xs text-gray-500">{subtext}</p>}
+    </div>
+  </div>
+);
 
 export default function HardwareMonitor() {
   const { stats, loading, error } = useHardwareStats({
     interval: 2000,
-    apiUrl: process.env.NEXT_PUBLIC_HWMONITOR_API || '/api/hardware/stats',
   });
 
+  if (loading && !stats) return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-blue-500 animate-pulse">Initialisation du Nexus...</div>;
+  if (error) return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-red-500">Erreur de connexion : {error}</div>;
+
+  // Calcul pour l'alerte visuelle (Rouge si > 80°C)
+  const isCpuCritical = stats && stats.cpuTemp > 80;
+
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-200">
+    <div className="min-h-screen bg-gray-950 text-gray-200 font-sans selection:bg-blue-500/30 pb-10">
       <Navbar />
+      
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Hardware Monitor</h1>
-        {error && <p className="text-red-500">Error: {error}</p>}
-        {loading && <p>Loading...</p>}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* CPU & RAM */}
-            <div className="bg-gray-800 p-4 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">CPU & RAM</h2>
-              <CircularGauge label="CPU Load" value={stats.cpuLoad} />
-              <CircularGauge label="RAM Usage" value={stats.ramUsedPercent} />
-            </div>
-
-            {/* GPU */}
-            <div className="bg-gray-800 p-4 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">GPU</h2>
-              {stats.gpus.map((gpu, idx) => (
-                <GpuCard key={idx} gpu={gpu} />
-              ))}
-            </div>
-
-            {/* Storage */}
-            <div className="bg-gray-800 p-4 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Storage</h2>
-              {stats.drives.map((drive, idx) => (
-                <StorageBar key={idx} {...drive} />
-              ))}
-            </div>
-
-            {/* Network */}
-            <div className="bg-gray-800 p-4 rounded-lg shadow">
-              <h2 className="text-xl font-semibold mb-4">Network</h2>
-              <p>Upload: {stats.network.uploadSpeed} Mbps</p>
-              <p>Download: {stats.network.downloadSpeed} Mbps</p>
+        
+        {/* === HEADER === */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <Activity className="text-blue-500" /> 
+              System Overview
+            </h1>
+            <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
+               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+               {stats?.osName || "System Online"}
+            </p>
+          </div>
+          <div className="flex gap-4">
+            <div className="px-4 py-2 bg-gray-900 rounded-lg border border-gray-800 text-sm text-gray-400 flex items-center gap-3">
+              <Clock size={16} />
+              <div>
+                <span className="block text-[10px] font-bold text-gray-500 uppercase">Uptime</span>
+                <span className="text-white font-mono">{stats?.uptime || "00:00:00"}</span>
+              </div>
             </div>
           </div>
+        </div>
+
+        {stats && (
+          <>
+            {/* === KPI CARDS === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <StatCard 
+                icon={Cpu} 
+                title="CPU Load" 
+                value={`${stats.cpuLoad.toFixed(1)}%`} 
+                subtext={`${stats.cpuTemp}°C • ${stats.cpuClockSpeed.toFixed(0)} MHz`}
+                color={isCpuCritical ? "text-red-500" : "text-blue-400"}
+              />
+              <StatCard 
+                icon={MemoryStick} 
+                title="Memory" 
+                value={`${stats.ramUsedPercent.toFixed(1)}%`} 
+                subtext={`${stats.ramUsed.toFixed(1)} GB / ${stats.ramTotal.toFixed(1)} GB`}
+                color="text-purple-400"
+              />
+              <StatCard 
+                icon={Zap} 
+                title="Power Draw" 
+                value={`${stats.cpuPower.toFixed(1)} W`} 
+                subtext="CPU Package Only"
+                color="text-yellow-400"
+              />
+              <StatCard 
+                icon={Wifi} 
+                title="Network" 
+                value={`${stats.network.downloadSpeed.toFixed(1)} Mb/s`} 
+                subtext={`Up: ${stats.network.uploadSpeed.toFixed(1)} Mb/s`}
+                color="text-green-400"
+              />
+            </div>
+
+            {/* === MAIN GRID === */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* COLONNE 1 & 2 : CPU & GPU */}
+              <div className="lg:col-span-2 space-y-6">
+                
+                {/* CPU PANEL (Avec Alerte Rouge) */}
+                <div className={`
+                    bg-gray-900 border rounded-xl p-6 shadow-xl transition-all duration-500
+                    ${isCpuCritical ? 'border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'border-gray-800'}
+                `}>
+                  <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                      {isCpuCritical ? <AlertTriangle className="text-red-500 animate-bounce" /> : <Cpu size={20} />}
+                      Processor Details
+                    </h2>
+                    <span className="px-2 py-1 bg-gray-800 text-gray-400 text-xs rounded border border-gray-700">
+                        {stats.cpuName}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Visualisation Coeurs (Fake pour le style) */}
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-8 gap-1 h-32 items-end">
+                        {[...Array(16)].map((_, i) => (
+                          <div key={i} className="bg-gray-800 rounded-sm relative overflow-hidden group w-full h-full">
+                             <div 
+                                className={`absolute bottom-0 w-full transition-all duration-300 ${isCpuCritical ? 'bg-red-500' : 'bg-blue-500'}`} 
+                                style={{height: `${Math.random() * (stats.cpuLoad + 20)}%`, opacity: 0.6}}
+                             ></div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-center text-xs text-gray-500">Logical Cores Activity</p>
+                    </div>
+
+                    <div className="flex flex-col justify-center space-y-4">
+                      <ProgressBar 
+                        label="Total Load" 
+                        value={stats.cpuLoad} 
+                        color={isCpuCritical ? "bg-red-500" : "bg-blue-600"} 
+                      />
+                      <ProgressBar 
+                        label="Temperature" 
+                        value={stats.cpuTemp} 
+                        subLabel={`${stats.cpuTemp}°C`} 
+                        color={stats.cpuTemp > 80 ? "bg-red-500" : stats.cpuTemp > 60 ? "bg-orange-400" : "bg-emerald-500"} 
+                      />
+                      
+                      <div className="grid grid-cols-2 gap-4 mt-2">
+                         <div className="bg-gray-800/50 p-2 rounded border border-gray-700/50 text-center">
+                            <span className="text-xs text-gray-500 block">Fan Speed</span>
+                            <span className="text-white font-mono">{stats.cpuFanSpeed.toFixed(0)} RPM</span>
+                         </div>
+                         <div className="bg-gray-800/50 p-2 rounded border border-gray-700/50 text-center">
+                            <span className="text-xs text-gray-500 block">Power</span>
+                            <span className="text-white font-mono">{stats.cpuPower.toFixed(1)} W</span>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* GPU Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {stats.gpus.map((gpu, idx) => (
+                    <div key={idx} className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-xl relative overflow-hidden group hover:border-purple-500/50 transition-colors">
+                      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Zap size={100} />
+                      </div>
+                      <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2 relative z-10">
+                        <Server size={20} className="text-purple-500" /> GPU {idx + 1}
+                      </h2>
+                      <div className="relative z-10 space-y-4">
+                        <div className="flex justify-between items-end">
+                          <span className="text-gray-400 text-xs truncate max-w-[150px]">{gpu.name}</span>
+                          <span className="text-2xl font-bold text-white">{gpu.load.toFixed(0)}%</span>
+                        </div>
+                        <ProgressBar label="Core Load" value={gpu.load} color="bg-purple-500" />
+                        <ProgressBar 
+                            label="VRAM Usage" 
+                            value={(gpu.memoryUsed / gpu.memoryTotal) * 100} 
+                            subLabel={`${gpu.memoryUsed.toFixed(0)} / ${gpu.memoryTotal.toFixed(0)} MB`} 
+                            color="bg-purple-400/70" 
+                        />
+                        
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                           <div className="bg-gray-800/50 p-2 rounded border border-gray-700/50 text-center">
+                              <span className="text-[10px] text-gray-500 block uppercase">Temp</span>
+                              <span className="text-white font-mono text-sm">{gpu.temperature.toFixed(0)}°C</span>
+                           </div>
+                           <div className="bg-gray-800/50 p-2 rounded border border-gray-700/50 text-center">
+                              <span className="text-[10px] text-gray-500 block uppercase">Fan</span>
+                              <span className="text-white font-mono text-sm">{gpu.fanSpeed.toFixed(0)}%</span>
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* COLONNE 3 : Storage, Processes & Network */}
+              <div className="space-y-6">
+                
+                {/* TOP PROCESSES (Nouveau !) */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-xl">
+                  <h2 className="text-sm font-semibold text-white mb-4 flex items-center gap-2 uppercase tracking-wide">
+                    <Activity size={16} className="text-pink-500" /> Top Memory Usage
+                  </h2>
+                  <div className="space-y-3">
+                    {stats.topProcesses?.length > 0 ? stats.topProcesses.map((proc) => (
+                      <div key={proc.id} className="flex justify-between items-center text-xs border-b border-gray-800 pb-2 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-pink-500/50"></div>
+                          <span className="text-gray-300 font-mono truncate max-w-[100px]" title={proc.name}>{proc.name}</span>
+                        </div>
+                        <span className="text-pink-400 font-bold">{proc.memoryUsedMb.toFixed(0)} MB</span>
+                      </div>
+                    )) : (
+                       <p className="text-xs text-gray-600 italic">Aucune donnée processus...</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Storage Panel */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 h-fit">
+                  <h2 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                    <HardDrive size={20} /> Storage
+                  </h2>
+                  <div className="space-y-6">
+                    {stats.drives.map((drive, idx) => (
+                      <div key={idx} className="group">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                            <span className="text-gray-600 text-xs bg-gray-800 px-1 rounded">{drive.mount || "DISK"}</span>
+                            {drive.name}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                             <span>{drive.usedSpace.toFixed(0)} GB Used</span>
+                             <span>{drive.totalSpace.toFixed(0)} GB Total</span>
+                        </div>
+                        <div className="w-full bg-gray-800 rounded-full h-2 relative overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${drive.usedPercent > 90 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${drive.usedPercent}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Network Panel */}
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <Wifi size={20} /> Network
+                  </h2>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/30">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-500/20 rounded text-green-400"><ArrowDown size={16}/></div>
+                        <div>
+                          <span className="block text-xs text-gray-500">Download</span>
+                          <span className="block text-sm font-mono text-white">{stats.network.downloadSpeed.toFixed(1)} Mbps</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg border border-gray-700/30">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-500/20 rounded text-blue-400"><ArrowUp size={16}/></div>
+                        <div>
+                          <span className="block text-xs text-gray-500">Upload</span>
+                          <span className="block text-sm font-mono text-white">{stats.network.uploadSpeed.toFixed(1)} Mbps</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
