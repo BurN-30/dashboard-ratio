@@ -2,20 +2,28 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // Use env var if provided, otherwise fall back to the public O2Switch path
-    const base = process.env.JSON_BASE_URL || 'https://example.com/dash';
+    // Use env var if provided
+    const base = process.env.JSON_BASE_URL;
+    if (!base) {
+      console.error('[/api/history] JSON_BASE_URL not configured');
+      return NextResponse.json({ error: 'Configuration Error' }, { status: 500 });
+    }
     console.log('[/api/history] Base URL:', base);
 
     const url = `${base.replace(/\/$/, '')}/history.json`;
     console.log('[/api/history] Fetching from:', url);
 
     // Optional headers for protected endpoints (Basic Auth via .htaccess) and origin hint
-    const origin = process.env.JSON_ORIGIN || 'https://dash.example.com';
+    const origin = process.env.JSON_ORIGIN;
     const basic = process.env.JSON_AUTH_BASIC; // format: user:password
     const headers: Record<string, string> = {
-      Origin: origin,
       'User-Agent': 'DashboardFetcher/1.0',
     };
+    
+    if (origin) {
+      headers['Origin'] = origin;
+    }
+
     if (basic) {
       try {
         const token = Buffer.from(basic).toString('base64');

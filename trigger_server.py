@@ -11,7 +11,10 @@ import requests
 import json
 
 # --- CONFIGURATION ---
-SECRET_TOKEN = REDACTED"TRIGGER_TOKEN", "301101230669")
+SECRET_TOKEN = REDACTED"TRIGGER_TOKEN")
+if not SECRET_TOKEN:
+    raise ValueError("❌ Erreur : La variable d'environnement TRIGGER_TOKEN est manquante.")
+
 SCRAPE_INTERVAL_HOURS = 6
 is_scraping_running = False
 

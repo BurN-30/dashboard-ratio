@@ -2,9 +2,16 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    // 1. ON FORCE L'URL NGROK (On ignore la variable d'env Vercel pour l'instant)
-    // Remplace l'URL ci-dessous par ton URL Ngrok actuelle si elle a changé
-    const url = 'https://submedial-bloodlike-sarah.ngrok-free.dev/hardware-proxy';
+    // 1. ON FORCE L'URL NGROK VIA VARIABLE D'ENVIRONNEMENT
+    const baseUrl = process.env.NGROK_URL;
+    if (!baseUrl) {
+      return NextResponse.json(
+        { error: 'Configuration Error: NGROK_URL not set' },
+        { status: 500 }
+      );
+    }
+
+    const url = `${baseUrl}/hardware-proxy`;
 
     // 2. On appelle le Python via le tunnel avec le Sésame
     const res = await fetch(url, {
