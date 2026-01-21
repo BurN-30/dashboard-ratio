@@ -9,6 +9,10 @@ import time
 from datetime import datetime
 import requests
 import json
+from dotenv import load_dotenv
+
+# Charger les variables d'environnement
+load_dotenv()
 
 # --- CONFIGURATION ---
 SECRET_TOKEN = os.getenv("TRIGGER_TOKEN")

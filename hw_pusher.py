@@ -22,6 +22,8 @@ HWMONITOR_TOKEN = os.getenv("HWMONITOR_TOKEN")
 
 LOCAL_API_URL = "http://localhost:5056/api/stats"
 OUTPUT_FILE = "hardware.json"
+# Add path to the frontend's public folder for local dev convenience
+FRONTEND_PUBLIC_DIR = os.path.join(script_dir, "torrent-dashboard", "public")
 UPLOAD_INTERVAL = 2 # seconds
 
 def fetch_local_stats():
@@ -46,25 +48,43 @@ def upload_to_ftp(data):
         # Save to local file first
         with open(OUTPUT_FILE, 'w') as f:
             json.dump(data, f)
+            
+        # [NEW] Also save to frontend public dir if it exists (for local dev)
+        if os.path.isdir(FRONTEND_PUBLIC_DIR):
+            public_file = os.path.join(FRONTEND_PUBLIC_DIR, OUTPUT_FILE)
+            try:
+                with open(public_file, 'w') as f:
+                    json.dump(data, f)
+                # print(f"Updated local frontend: {public_file}") # Optional logging
+            except Exception as fe:
+                print(f"Error updating frontend file: {fe}")
 
         # Upload to FTP
         with ftplib.FTP(FTP_HOST, FTP_USER, FTP_PASS) as ftp:
             ftp.cwd(FTP_DIR)
             with open(OUTPUT_FILE, 'rb') as f:
                 ftp.storbinary(f'STOR {OUTPUT_FILE}', f)
+            
             # Changer les permissions du fichier en 644 (lecture publique)
             try:
-                ftp.sendcmd(f'SITE CHMOD 644 {OUTPUT_FILE}')
+                # Certains serveurs FTP (ex: Windows IIS) ne supportent pas SITE CHMOD
+                # On capture l'erreur pour ne pas crasher le script
+                resp = ftp.sendcmd(f'SITE CHMOD 644 {OUTPUT_FILE}')
+                # print(f"Permissions updated: {resp}")
             except Exception as chmod_err:
-                print(f"Warning: Impossible de changer les permissions (chmod) : {chmod_err}")
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Uploaded {OUTPUT_FILE} (chmod 644)")
+                # print(f"Note: Impossible de changer les permissions (chmod) : {chmod_err}")
+                pass
+                
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Stats updated (FTP & Local)")
     except Exception as e:
-        print(f"FTP Error: {e}")
+        print(f"FTP/File Error: {e}")
 
 def main():
     print("Starting Hardware Monitor Pusher...")
     print(f"Monitoring: {LOCAL_API_URL}")
-    print(f"Target: FTP {FTP_HOST}/{FTP_DIR}/{OUTPUT_FILE}")
+    print(f"Target FTP: {FTP_HOST}/{FTP_DIR}/{OUTPUT_FILE}")
+    if os.path.isdir(FRONTEND_PUBLIC_DIR):
+        print(f"Target Local: {os.path.join(FRONTEND_PUBLIC_DIR, OUTPUT_FILE)}")
     
     while True:
         stats = fetch_local_stats()
