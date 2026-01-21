@@ -46,8 +46,10 @@ interface UseHardwareStatsOptions {
 export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const {
     interval = 2000,
-    // Utilise le proxy Ngrok par défaut
-    apiUrl = 'https://submedial-bloodlike-sarah.ngrok-free.dev/hardware-proxy',
+    // Utilise la variable d'environnement ou le proxy local par défaut
+    apiUrl = process.env.NEXT_PUBLIC_NGROK_URL 
+      ? `${process.env.NEXT_PUBLIC_NGROK_URL}/hardware-proxy` 
+      : '/api/hardware/stats',
   } = options;
 
   const [stats, setStats] = useState<HardwareStats | null>(null);
