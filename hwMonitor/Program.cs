@@ -22,9 +22,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowDashboard", policy =>
     {
+        var dashboardDomain = Environment.GetEnvironmentVariable("DASHBOARD_DOMAIN") ?? "http://localhost:3000";
         policy.WithOrigins(
-            "https://dash.example.com", // Production
-            "http://localhost:3000"         // Développement
+            dashboardDomain,         // Production
+            "http://localhost:3000"  // Développement
         )
         .AllowAnyMethod()
         .AllowAnyHeader();

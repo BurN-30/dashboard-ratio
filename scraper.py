@@ -23,7 +23,7 @@ SITES = [
     {
         "name": "Generation-Free",
         "login_url": "https://generation-free.org/login",
-        "profile_url": "https://generation-free.org/users/REDACTED_USER", 
+        "profile_url": f"https://generation-free.org/users/{os.getenv('GF_USERNAME')}", 
         "username": os.getenv("GF_USER"),
         "password": os.getenv("GF_PASS"),
         "type": "unit3d"
@@ -31,7 +31,7 @@ SITES = [
     {
         "name": "TheOldSchool",
         "login_url": "https://theoldschool.cc/login",
-        "profile_url": "https://theoldschool.cc/users/REDACTED_USER", 
+        "profile_url": f"https://theoldschool.cc/users/{os.getenv('TOS_USERNAME')}", 
         "username": os.getenv("TOS_USER"),
         "password": os.getenv("TOS_PASS"),
         "type": "unit3d"
@@ -39,7 +39,7 @@ SITES = [
     {
         "name": "Sharewood",
         "login_url": "https://sharewood.tv/login",
-        "profile_url": "https://www.sharewood.tv/REDACTED_USER.97438",
+        "profile_url": f"https://www.sharewood.tv/{os.getenv('SW_USERNAME')}",
         "username": os.getenv("SW_USER"),
         "password": os.getenv("SW_PASS"),
         "type": "sharewood"
