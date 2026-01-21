@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * Route API pour déclencher manuellement le scraper à distance
+ * Appelée par le bouton de refresh du dashboard
+ */
 export async function POST() {
   try {
     const triggerUrl = process.env.SCRAPER_TRIGGER_URL; 
