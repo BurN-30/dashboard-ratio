@@ -11,6 +11,9 @@ export default function RefreshButton() {
   // Stocker le dernier timestamp connu pour comparaison
   const lastTimestampRef = useRef<number | null>(null);
 
+  // Vérifier si on est en production (déployé sur Vercel)
+  const isProduction = process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+
   const getCurrentTimestamp = async () => {
     try {
       const res = await fetch('/api/stats', { cache: 'no-store' });
@@ -79,12 +82,17 @@ export default function RefreshButton() {
     }
   };
 
+  // Si en production et que la config n'est pas définie, ne pas afficher le bouton
+  if (isProduction && (!process.env.NEXT_PUBLIC_SCRAPER_ENABLED)) {
+    return null;
+  }
+
   return (
     <button
       onClick={handleRefresh}
       disabled={isLoading}
       className="flex items-center justify-center w-8 h-8 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-      title="Actualiser les données"
+      title="Actualiser les données (déclenche le scraper)"
     >
       <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
     </button>
