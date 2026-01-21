@@ -1,6 +1,7 @@
 import json
 import time
 import os
+import ftplib
 import re
 from datetime import datetime
 from playwright.sync_api import sync_playwright
@@ -13,6 +14,12 @@ os.chdir(script_dir)
 
 # Charger les variables d'environnement depuis .env
 load_dotenv()
+
+# --- CONFIGURATION FTP ---
+FTP_HOST = os.getenv("FTP_HOST")
+FTP_USER = os.getenv("FTP_USER")
+FTP_PASS = os.getenv("FTP_PASS")
+FTP_DIR  = os.getenv("FTP_DIR")
 
 # --- CONFIGURATION FICHIER ---
 OUTPUT_FILE = "stats.json"
@@ -252,6 +259,37 @@ def clean_history(history):
     
     return new_history
 
+def upload_to_ftp(files):
+    """Upload une liste de fichiers vers le FTP"""
+    print("--- ☁️  Upload FTP ---")
+    if not all([FTP_HOST, FTP_USER, FTP_PASS, FTP_DIR]):
+        print("⚠️  Configuration FTP manquante dans .env (FTP_HOST, FTP_USER, FTP_PASS, FTP_DIR)")
+        return
+
+    try:
+        with ftplib.FTP(FTP_HOST, FTP_USER, FTP_PASS) as ftp:
+            ftp.cwd(FTP_DIR)
+            
+            for file_name in files:
+                if not os.path.exists(file_name):
+                    print(f"⚠️  Fichier introuvable pour upload : {file_name}")
+                    continue
+                    
+                print(f"-> Upload de {file_name}...")
+                with open(file_name, 'rb') as f:
+                    ftp.storbinary(f'STOR {file_name}', f)
+                
+                # Changer les permissions (lecture publique)
+                try:
+                    ftp.sendcmd(f'SITE CHMOD 644 {file_name}')
+                except:
+                    pass # Certains serveurs FTP ne supportent pas CHMOD
+                    
+            print("✅ Upload terminé avec succès.")
+            
+    except Exception as e:
+        print(f"❌ Erreur FTP: {e}")
+
 def main():
     final_data = {}
 
@@ -297,27 +335,33 @@ def main():
     # Ajout du timestamp
     final_data["_timestamp"] = int(time.time())
 
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        json.dump(final_data, f, indent=4, ensure_ascii=False)
-    print(f"\n💾 Fichier {OUTPUT_FILE} généré en local.")
-
-    # Gestion de l'historique
+    # --- GESTION HISTORIQUE ---
     history = []
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 history = json.load(f)
         except:
-            print("⚠️ Erreur lecture historique, création d'un nouveau.")
+            history = [] # Si fichier corrompu
     
+    # Ajouter les nouvelles data
     history.append(final_data)
     
-    # Nettoyage intelligent de l'historique
+    # Nettoyer
     history = clean_history(history)
-
+    
+    # Sauvegarder Stats
+    with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(final_data, f, indent=4, ensure_ascii=False)
+    
+    # Sauvegarder Historique
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, indent=4, ensure_ascii=False)
-    print(f"💾 Fichier {HISTORY_FILE} mis à jour ({len(history)} entrées).")
+
+    print("✅ Sauvegarde locale effectuée (stats + history).")
+
+    # 3. UPLOAD FTP
+    upload_to_ftp([OUTPUT_FILE, HISTORY_FILE])
 
 if __name__ == "__main__":
     main()

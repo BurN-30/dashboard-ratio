@@ -43,6 +43,7 @@ export interface HardwareStats {
   cpuPower: number;
   cpuClockSpeed: number;
   cpuFanSpeed: number;
+  cpuCoreLoads: number[]; // <--- Ajouté
   
   // Listes
   gpus: GpuData[];
@@ -61,120 +62,70 @@ export interface HardwareStats {
 
 interface UseHardwareStatsOptions {
   interval?: number;
-  apiUrl?: string;
-  historyLength?: number; // Nouveau : combien de points on garde en mémoire
+  url?: string;
+  historyLength?: number;
 }
 
 export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const {
     interval = 2000,
-    historyLength = 30, // Valeur par défaut: 30 points d'historique
-    // Utilise la variable d'environnement ou le proxy local par défaut
-    apiUrl = process.env.NEXT_PUBLIC_NGROK_URL 
-      ? `${process.env.NEXT_PUBLIC_NGROK_URL}/hardware-proxy` 
-      : '/api/hardware/stats',
+    url = '/hardware.json', // URL par défaut (à la racine du site)
+    historyLength = 30,
   } = options;
 
   const [stats, setStats] = useState<HardwareStats | null>(null);
-  const [history, setHistory] = useState<HardwareStats[]>([]); // Pour les graphiques
-  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState<{ time: string; cpu: number; ram: number }[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(true); // Par défaut on veut que ça tourne
+  const [loading, setLoading] = useState(true);
 
-  // Ref pour annuler la requête si le composant est démonté
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // Utiliser useRef pour garder la dernière valeur sans déclencher de re-render
+  const latestStatsRef = useRef<HardwareStats | null>(null);
 
   const fetchStats = useCallback(async () => {
-    // Annuler la requête précédente si elle est encore en cours
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    
-    // Nouveau contrôleur pour cette requête
-    abortControllerRef.current = new AbortController();
-
     try {
-      const headers: HeadersInit = {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-      };
+      // Ajout d'un timestamp pour éviter le cache du navigateur
+      const cacheBuster = `?t=${new Date().getTime()}`;
+      const response = await fetch(`${url}${cacheBuster}`);
       
-      const token = process.env.NEXT_PUBLIC_HWMONITOR_TOKEN;
-      if (token) {
-        headers['X-Api-Key'] = token;
-      }
-
-      const response = await fetch(apiUrl, { 
-        headers,
-        signal: abortControllerRef.current.signal // Lier le signal d'annulation
-      });
-
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+        throw new Error('Network response was not ok');
       }
-
+      
       const data: HardwareStats = await response.json();
       
-      // Mise à jour des stats actuelles
-      setStats(data);
-      setError(null);
+      // Mise à jour si les données ont changé (basique)
+      if (JSON.stringify(data) !== JSON.stringify(latestStatsRef.current)) {
+        latestStatsRef.current = data;
+        setStats(data);
+        setError(null);
 
-      // Mise à jour de l'historique (FIFO: First In First Out)
-      setHistory(prev => {
-        const newHistory = [...prev, data];
-        if (newHistory.length > historyLength) {
-          return newHistory.slice(newHistory.length - historyLength);
-        }
-        return newHistory;
-      });
-
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        // Ignorer l'erreur si c'est juste une annulation volontaire
-        return;
+        // Mise à jour de l'historique pour les graphiques
+        setHistory(prev => {
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const newPoint = {
+            time: timeStr,
+            cpu: data.cpuLoad,
+            ram: data.ramUsedPercent
+          };
+          const newHistory = [...prev, newPoint];
+          return newHistory.slice(-historyLength);
+        });
       }
-      console.error('Hardware stats fetch error:', err);
-      // On ne met pas forcément error en state bloquant pour éviter de flasher l'écran 
-      // si une seule requête échoue (micro-coupure), sauf si on a pas de stats du tout.
-      if (!stats) setError(err instanceof Error ? err.message : 'Connection failed');
+    } catch (err) {
+      console.error('Error fetching hardware stats:', err);
+      // On ne set pas l'erreur immédiatement pour éviter le clignotement si un fetch rate
+      // setError('Impossible de joindre le moniteur');
     } finally {
       setLoading(false);
     }
-  }, [apiUrl, historyLength, stats]); // stats ajouté aux dépendances pour la logique d'erreur conditionnelle
+  }, [url, historyLength]);
 
-  // Initial fetch
   useEffect(() => {
     fetchStats();
-    return () => {
-      // Cleanup au démontage
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+    const timer = setInterval(fetchStats, interval);
+    return () => clearInterval(timer);
+  }, [fetchStats, interval]);
 
-  // Auto-polling
-  useEffect(() => {
-    if (!isPolling) return;
-
-    const intervalId = setInterval(fetchStats, interval);
-    return () => clearInterval(intervalId);
-  }, [isPolling, interval, fetchStats]);
-
-  const togglePolling = useCallback(() => setIsPolling(prev => !prev), []);
-  
-  // Fonction pour vider l'historique si besoin
-  const clearHistory = useCallback(() => setHistory([]), []);
-
-  return {
-    stats,
-    history, // <-- La data clé pour tes sparklines
-    loading,
-    error,
-    isPolling,
-    togglePolling,
-    manualRefresh: fetchStats,
-    clearHistory
-  };
+  return { stats, history, error, loading };
 }

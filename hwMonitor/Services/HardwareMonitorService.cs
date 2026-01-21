@@ -1,6 +1,7 @@
 using LibreHardwareMonitor.Hardware;
 using hwMonitor.Models;
 using hwMonitor.Visitors;
+using System.Text.RegularExpressions;
 
 namespace hwMonitor.Services;
 
@@ -89,6 +90,9 @@ public class HardwareMonitorService : IHardwareMonitorService
             var uptimeSpan = TimeSpan.FromMilliseconds(Environment.TickCount64);
             stats.Uptime = $"{uptimeSpan.Days}j {uptimeSpan.Hours}h {uptimeSpan.Minutes}m";
 
+            // Ajout du Timestamp pour le suivi frontend
+            stats.Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
             ExtractTopProcesses(stats);
             
             return stats;
@@ -107,13 +111,28 @@ public class HardwareMonitorService : IHardwareMonitorService
     private void ExtractCpuStats(IHardware hardware, HardwareStats stats)
     {
         stats.CpuName = hardware.Name;
+        // Reset list to avoid duplicates if called multiple times on same object (though strictly new object is created each time)
+        stats.CpuCoreLoads = new List<float>();
+
+        // Temporary list to sort cores if needed, though usually they come in order
+        var coreLoads = new Dictionary<string, float>();
 
         foreach (var sensor in hardware.Sensors)
         {
             if (!sensor.Value.HasValue) continue;
 
-            if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Total"))
-                stats.CpuLoad = sensor.Value.Value;
+            if (sensor.SensorType == SensorType.Load)
+            {
+                if (sensor.Name.Contains("Total"))
+                {
+                    stats.CpuLoad = sensor.Value.Value;
+                }
+                // Accept "Core", "CPU #", or "Thread" (for logical cores)
+                else if (sensor.Name.Contains("Core") || sensor.Name.Contains("CPU #") || sensor.Name.Contains("Thread"))
+                {
+                    coreLoads[sensor.Name] = sensor.Value.Value;
+                }
+            }
                 
             // Ajout de "Tdie" et "Tctl" pour Ryzen
             if (sensor.SensorType == SensorType.Temperature && 
@@ -125,6 +144,34 @@ public class HardwareMonitorService : IHardwareMonitorService
                 
             if (sensor.SensorType == SensorType.Clock)
                 stats.CpuClockSpeed = Math.Max(stats.CpuClockSpeed, sensor.Value.Value); // On prend le coeur le plus rapide
+        }
+
+        // Debug logging to help troubleshoot missing cores
+        if (coreLoads.Count == 0)
+        {
+            Console.WriteLine($"[Warning] No CPU Cores detected for {hardware.Name}. Found sensors:");
+            foreach (var s in hardware.Sensors)
+                if (s.SensorType == SensorType.Load)
+                    Console.WriteLine($" - {s.Name}: {s.Value}%");
+        }
+
+        // Sort dynamically using Regex for "Natural Sort" (e.g. Core #2 before Core #10)
+        var sortedCores = coreLoads
+            .OrderBy(kvp => 
+            {
+                // Match the first sequence of digits in the name
+                var match = Regex.Match(kvp.Key, @"\d+");
+                if (match.Success && int.TryParse(match.Value, out int number))
+                {
+                    return number;
+                }
+                return int.MaxValue;
+            })
+            .ThenBy(kvp => kvp.Key); // Stable fallback
+
+        foreach (var kvp in sortedCores)
+        {
+            stats.CpuCoreLoads.Add(kvp.Value);
         }
     }
 
@@ -255,7 +302,6 @@ public class HardwareMonitorService : IHardwareMonitorService
         _computer?.Close();
     }
 
-// === À COLLER TOUT EN BAS DE LA CLASSE ===
     private void ExtractTopProcesses(HardwareStats stats)
     {
         try 

@@ -162,17 +162,33 @@ export default function HardwareMonitor() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Visualisation Coeurs */}
                     <div className="space-y-4">
-                      <div className="grid grid-cols-8 gap-1 h-32 items-end">
-                        {[...Array(16)].map((_, i) => (
-                          <div key={i} className="bg-gray-800 rounded-sm relative overflow-hidden group w-full h-full">
-                             <div 
-                                className={`absolute bottom-0 w-full transition-all duration-300 ${isCpuCritical ? 'bg-red-500' : 'bg-blue-500'}`} 
-                                style={{height: `${Math.random() * (cpuLoad + 20)}%`, opacity: 0.6}}
-                             ></div>
+                      {/* Grid dynamique en fonction du nombre de coeurs */}
+                      <div 
+                        className="grid gap-1 h-32 items-end"
+                        style={{
+                          gridTemplateColumns: `repeat(${(stats.cpuCoreLoads && stats.cpuCoreLoads.length > 0) ? Math.min(Math.max(stats.cpuCoreLoads.length, 4), 32) : 8}, 1fr)`
+                        }}
+                      >
+                        {(stats.cpuCoreLoads && stats.cpuCoreLoads.length > 0) ? (
+                          stats.cpuCoreLoads.map((load, i) => (
+                            <div key={i} className="bg-gray-800 rounded-sm relative overflow-hidden group w-full h-full" title={`Core ${i+1}: ${load.toFixed(0)}%`}>
+                               <div 
+                                  className={`absolute bottom-0 w-full transition-all duration-300 ${load > 90 ? 'bg-red-500' : 'bg-blue-500'}`} 
+                                  style={{height: `${load}%`, opacity: 0.8}}
+                               ></div>
+                            </div>
+                          ))
+                        ) : (
+                          // Message si pas de données détectées
+                          <div className="col-span-full h-full flex items-center justify-center bg-gray-900/50 border border-gray-800 rounded">
+                            <p className="text-xs text-gray-500">Core details unavailable</p>
                           </div>
-                        ))}
+                        )}
                       </div>
-                      <p className="text-center text-xs text-gray-500">Logical Cores Activity</p>
+                      <p className="text-center text-xs text-gray-500">
+                        Logical Cores Activity 
+                        {stats.cpuCoreLoads && stats.cpuCoreLoads.length > 0 && ` (${stats.cpuCoreLoads.length} Cores detected)`}
+                      </p>
                     </div>
 
                     <div className="flex flex-col justify-center space-y-4">
