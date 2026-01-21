@@ -12,10 +12,8 @@ Voici une représentation de l'arborescence du projet, mettant en évidence les 
 ├── README.md
 ├── requirements.txt
 ├── scraper.py
-├── start_server.bat
+├── start_pusher.bat
 ├── start_silent.vbs
-├── stop_server.bat
-├── trigger_server.py
 ├── .vscode
 │   └── settings.json
 ├── hwMonitor
