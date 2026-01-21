@@ -2,12 +2,9 @@ import { AllStats } from "@/types/tracker";
 
 export async function fetchTorrentStats(): Promise<AllStats | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_NGROK_URL || "http://localhost:8888";
-    const response = await fetch(`${baseUrl}/torrent/stats`, {
+    // Utiliser les routes API Next.js (qui font le proxy côté serveur)
+    const response = await fetch('/api/stats', {
       cache: "no-store",
-      headers: {
-        "ngrok-skip-browser-warning": "true",
-      },
     });
 
     if (!response.ok) {
@@ -25,12 +22,9 @@ export async function fetchTorrentStats(): Promise<AllStats | null> {
 
 export async function fetchTorrentHistory(): Promise<AllStats[] | null> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_NGROK_URL || "http://localhost:8888";
-    const response = await fetch(`${baseUrl}/torrent/history`, {
+    // Utiliser les routes API Next.js (qui font le proxy côté serveur)
+    const response = await fetch('/api/history', {
       cache: "no-store",
-      headers: {
-        "ngrok-skip-browser-warning": "true",
-      },
     });
 
     if (!response.ok) {
