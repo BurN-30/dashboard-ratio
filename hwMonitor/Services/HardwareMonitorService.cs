@@ -4,10 +4,6 @@ using hwMonitor.Visitors;
 
 namespace hwMonitor.Services;
 
-/// <summary>
-/// Service principal de monitoring matériel utilisant LibreHardwareMonitor
-/// IMPORTANT : Nécessite des droits Administrateur pour accéder aux capteurs matériels
-/// </summary>
 public class HardwareMonitorService : IHardwareMonitorService
 {
     private Computer? _computer;
@@ -20,52 +16,40 @@ public class HardwareMonitorService : IHardwareMonitorService
         
         try
         {
-            // Initialisation de l'objet Computer avec tous les composants nécessaires
             _computer = new Computer
             {
-                IsCpuEnabled = true,         // Surveillance CPU
-                IsGpuEnabled = true,         // Surveillance GPU (iGPU + dGPU)
-                IsMemoryEnabled = true,      // Surveillance RAM
-                IsStorageEnabled = true,     // Surveillance Stockage (tous les disques)
-                IsNetworkEnabled = true,     // Surveillance Réseau (Upload/Download)
-                IsControllerEnabled = true,  // Contrôleurs (pour ventilateurs/RGB)
-                IsMotherboardEnabled = true  // Carte mère (voltages, ventilateurs)
+                IsCpuEnabled = true,
+                IsGpuEnabled = true,
+                IsMemoryEnabled = true,
+                IsStorageEnabled = true,
+                IsNetworkEnabled = true,
+                IsControllerEnabled = true,  // Important pour certains contrôleurs de ventilo
+                IsMotherboardEnabled = true  // CRUCIAL pour les ventilateurs CPU (SuperIO)
             };
 
             _computer.Open();
         }
         catch (Exception ex)
         {
-            // Initialisation avec une instance vide si erreur (nécessite admin)
             _computer = null;
-            Console.Error.WriteLine($"⚠️ Erreur lors de l'initialisation des capteurs matériels: {ex.Message}");
-            Console.Error.WriteLine("💡 Assurez-vous que l'application s'exécute en mode Administrateur.");
+            Console.Error.WriteLine($"⚠️ Erreur init HardwareMonitor: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// Récupère les statistiques matérielles en temps réel
-    /// Optimisé pour être léger et rapide
-    /// </summary>
     public async Task<HardwareStats> GetHardwareStatsAsync()
     {
         var stats = new HardwareStats();
 
-        // Si Computer n'a pas pu être initialisé, retourner des stats vides
-        if (_computer == null)
-        {
-            return stats;
-        }
+        if (_computer == null) return stats;
 
         await _semaphore.WaitAsync();
         try
         {
-            // Mise à jour des capteurs (opération légère)
             _computer.Accept(_updateVisitor);
 
-            // Collecte des données de manière optimisée
             foreach (var hardware in _computer.Hardware)
             {
+                // On passe hardware ET stats pour remplir l'objet
                 switch (hardware.HardwareType)
                 {
                     case HardwareType.Cpu:
@@ -88,14 +72,30 @@ public class HardwareMonitorService : IHardwareMonitorService
                     case HardwareType.Network:
                         ExtractNetworkStats(hardware, stats);
                         break;
+
+                    // NOUVEAU : On scanne la carte mère pour trouver les ventilateurs
+                    case HardwareType.Motherboard:
+                    case HardwareType.SuperIO:
+                        ExtractMotherboardStats(hardware, stats);
+                        break;
                 }
             }
 
+            // === AJOUT : Infos Système ===
+            // Récupération de l'OS
+            stats.OsName = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
+
+            // Récupération de l'Uptime
+            var uptimeSpan = TimeSpan.FromMilliseconds(Environment.TickCount64);
+            stats.Uptime = $"{uptimeSpan.Days}j {uptimeSpan.Hours}h {uptimeSpan.Minutes}m";
+
+            ExtractTopProcesses(stats);
+            
             return stats;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Erreur lors de la lecture des capteurs: {ex.Message}");
+            Console.Error.WriteLine($"Erreur lecture capteurs: {ex.Message}");
             return stats;
         }
         finally
@@ -104,239 +104,178 @@ public class HardwareMonitorService : IHardwareMonitorService
         }
     }
 
-    /// <summary>
-    /// Extrait les statistiques CPU (charge, température, puissance, fréquence)
-    /// </summary>
     private void ExtractCpuStats(IHardware hardware, HardwareStats stats)
     {
-        stats.CpuName = hardware.Name ?? "CPU Unknown";
+        stats.CpuName = hardware.Name;
 
         foreach (var sensor in hardware.Sensors)
         {
-            if (sensor.Value.HasValue)
-            {
-                // Charge CPU totale
-                if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase))
-                {
-                    stats.CpuLoad = sensor.Value.Value;
-                }
+            if (!sensor.Value.HasValue) continue;
+
+            if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Total"))
+                stats.CpuLoad = sensor.Value.Value;
                 
-                // Température CPU (Package ou Average)
-                if (sensor.SensorType == SensorType.Temperature && 
-                    (sensor.Name.Contains("Package", StringComparison.OrdinalIgnoreCase) || 
-                     sensor.Name.Contains("Average", StringComparison.OrdinalIgnoreCase) ||
-                     sensor.Name.Contains("Tctl", StringComparison.OrdinalIgnoreCase)))  // AMD Ryzen
-                {
-                    stats.CpuTemp = sensor.Value.Value;
-                }
+            // Ajout de "Tdie" et "Tctl" pour Ryzen
+            if (sensor.SensorType == SensorType.Temperature && 
+               (sensor.Name.Contains("Package") || sensor.Name.Contains("Average") || sensor.Name.Contains("Tdie")))
+                stats.CpuTemp = Math.Max(stats.CpuTemp, sensor.Value.Value); // On prend la plus haute trouvée
                 
-                // Consommation électrique (Watts)
-                if (sensor.SensorType == SensorType.Power && 
-                    (sensor.Name.Contains("Package", StringComparison.OrdinalIgnoreCase) ||
-                     sensor.Name.Contains("CPU", StringComparison.OrdinalIgnoreCase)))
-                {
-                    stats.CpuPower = sensor.Value.Value;
-                }
+            if (sensor.SensorType == SensorType.Power && sensor.Name.Contains("Package"))
+                stats.CpuPower = sensor.Value.Value;
                 
-                // Fréquence (Clock Speed en MHz)
-                if (sensor.SensorType == SensorType.Clock && 
-                    sensor.Name.Contains("Core", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Prendre la fréquence moyenne ou max
-                    if (stats.CpuClockSpeed == 0 || sensor.Value.Value > stats.CpuClockSpeed)
-                    {
-                        stats.CpuClockSpeed = sensor.Value.Value;
-                    }
-                }
-            }
+            if (sensor.SensorType == SensorType.Clock)
+                stats.CpuClockSpeed = Math.Max(stats.CpuClockSpeed, sensor.Value.Value); // On prend le coeur le plus rapide
         }
     }
 
-    /// <summary>
-    /// Extrait les statistiques GPU (supporte multi-GPU : iGPU + dGPU)
-    /// </summary>
+    // NOUVEAU : Extraction récursive pour trouver les ventilateurs sur la Carte Mère / SuperIO
+    private void ExtractMotherboardStats(IHardware hardware, HardwareStats stats)
+    {
+        // D'abord, regarder les capteurs directs de ce composant
+        foreach (var sensor in hardware.Sensors)
+        {
+            if (sensor.SensorType == SensorType.Fan && sensor.Value.HasValue)
+            {
+                // Essayer de deviner si c'est le ventilateur CPU
+                if (sensor.Name.Contains("CPU", StringComparison.OrdinalIgnoreCase) || 
+                    sensor.Name.Contains("Fan #1", StringComparison.OrdinalIgnoreCase)) // Souvent Fan #1 est le CPU
+                {
+                    stats.CpuFanSpeed = sensor.Value.Value;
+                }
+            }
+        }
+
+        // Ensuite, regarder dans les sous-composants (SuperIO est souvent DANS Motherboard)
+        foreach (var subHardware in hardware.SubHardware)
+        {
+            subHardware.Update(); // Important : Mettre à jour les sous-composants
+            ExtractMotherboardStats(subHardware, stats);
+        }
+    }
+
     private void ExtractGpuStats(IHardware hardware, HardwareStats stats)
     {
-        var gpuData = new GpuData
-        {
-            Name = hardware.Name ?? "GPU Unknown"
-        };
+        var gpu = new GpuData { Name = hardware.Name };
 
         foreach (var sensor in hardware.Sensors)
         {
-            if (sensor.Value.HasValue)
+            if (!sensor.Value.HasValue) continue;
+
+            if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Core"))
+                gpu.Load = sensor.Value.Value;
+
+            if (sensor.SensorType == SensorType.Temperature && sensor.Name.Contains("Core"))
+                gpu.Temperature = sensor.Value.Value;
+
+            if (sensor.SensorType == SensorType.SmallData || sensor.SensorType == SensorType.Data)
             {
-                // Charge GPU (Core)
-                if (sensor.SensorType == SensorType.Load && 
-                    (sensor.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
-                     sensor.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase)))
-                {
-                    gpuData.Load = sensor.Value.Value;
-                }
-                
-                // Température GPU
-                if (sensor.SensorType == SensorType.Temperature && 
-                    (sensor.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
-                     sensor.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase)))
-                {
-                    gpuData.Temperature = sensor.Value.Value;
-                }
-                
-                // Mémoire GPU utilisée
-                if (sensor.SensorType == SensorType.SmallData && 
-                    sensor.Name.Contains("Used", StringComparison.OrdinalIgnoreCase))
-                {
-                    gpuData.MemoryUsed = sensor.Value.Value;
-                }
-                
-                // Mémoire GPU totale
-                if (sensor.SensorType == SensorType.SmallData && 
-                    sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase))
-                {
-                    gpuData.MemoryTotal = sensor.Value.Value;
-                }
-                
-                // Vitesse ventilateur GPU
-                if (sensor.SensorType == SensorType.Control && 
-                    sensor.Name.Contains("Fan", StringComparison.OrdinalIgnoreCase))
-                {
-                    gpuData.FanSpeed = sensor.Value.Value;
-                }
-                
-                // Consommation GPU (Watts)
-                if (sensor.SensorType == SensorType.Power && 
-                    (sensor.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase) ||
-                     sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase)))
-                {
-                    gpuData.Power = sensor.Value.Value;
-                }
+                if (sensor.Name.Contains("Used") && sensor.Name.Contains("Memory")) gpu.MemoryUsed = sensor.Value.Value;
+                if (sensor.Name.Contains("Total") && sensor.Name.Contains("Memory")) gpu.MemoryTotal = sensor.Value.Value;
             }
+
+            if (sensor.SensorType == SensorType.Fan)
+                gpu.FanSpeed = sensor.Value.Value;
+
+            if (sensor.SensorType == SensorType.Power)
+                gpu.Power = sensor.Value.Value;
         }
-        
-        // Ajouter le GPU à la liste
-        stats.Gpus.Add(gpuData);
+        stats.Gpus.Add(gpu);
     }
 
-    /// <summary>
-    /// Extrait les statistiques RAM (utilisée/totale)
-    /// </summary>
     private void ExtractMemoryStats(IHardware hardware, HardwareStats stats)
     {
         foreach (var sensor in hardware.Sensors)
         {
-            if (sensor.Value.HasValue)
-            {
-                // RAM utilisée
-                if (sensor.SensorType == SensorType.Data && 
-                    sensor.Name.Contains("Used", StringComparison.OrdinalIgnoreCase))
-                {
-                    stats.RamUsed = sensor.Value.Value;
-                }
+            if (!sensor.Value.HasValue) continue;
+
+            if (sensor.SensorType == SensorType.Data && sensor.Name.Contains("Used"))
+                stats.RamUsed = sensor.Value.Value;
+
+            if (sensor.SensorType == SensorType.Data && sensor.Name.Contains("Available"))
+                stats.RamTotal = stats.RamUsed + sensor.Value.Value;
                 
-                // RAM disponible (pour calculer le total)
-                if (sensor.SensorType == SensorType.Data && 
-                    sensor.Name.Contains("Available", StringComparison.OrdinalIgnoreCase))
-                {
-                    stats.RamTotal = stats.RamUsed + sensor.Value.Value;
-                }
-                
-                // Pourcentage d'utilisation RAM
-                if (sensor.SensorType == SensorType.Load && 
-                    sensor.Name.Contains("Memory", StringComparison.OrdinalIgnoreCase))
-                {
-                    stats.RamUsedPercent = sensor.Value.Value;
-                }
-            }
+            if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Memory"))
+                stats.RamUsedPercent = sensor.Value.Value;
         }
     }
 
-    /// <summary>
-    /// Extrait les statistiques de stockage (supporte multi-disques : SSD + HDD)
-    /// </summary>
     private void ExtractStorageStats(IHardware hardware, HardwareStats stats)
     {
-        var driveData = new DriveData
-        {
-            Name = hardware.Name ?? "Drive Unknown"
-        };
-
+        // Ignorer les disques amovibles ou virtuels vides si nécessaire
+        var drive = new DriveData { Name = hardware.Name };
+        
+        // Essayer d'extraire la lettre de lecteur du nom (ex: "C: Samsung SSD") si dispo, sinon logique plus complexe requise
+        // Ici on simplifie. LibreHardwareMonitor ne donne pas toujours la lettre de lecteur facilement via sensor.
+        
         foreach (var sensor in hardware.Sensors)
         {
-            if (sensor.Value.HasValue)
-            {
-                // Pourcentage d'utilisation
-                if (sensor.SensorType == SensorType.Load && 
-                    sensor.Name.Contains("Used Space", StringComparison.OrdinalIgnoreCase))
-                {
-                    driveData.UsedPercent = sensor.Value.Value;
-                }
-                
-                // Espace utilisé et total (en Go)
-                if (sensor.SensorType == SensorType.Data)
-                {
-                    if (sensor.Name.Contains("Used", StringComparison.OrdinalIgnoreCase))
-                    {
-                        driveData.UsedSpace = sensor.Value.Value;
-                    }
-                    if (sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase))
-                    {
-                        driveData.TotalSpace = sensor.Value.Value;
-                    }
-                }
-                
-                // Température du disque (peut être null)
-                if (sensor.SensorType == SensorType.Temperature)
-                {
-                    driveData.Temperature = sensor.Value.Value;
-                }
-            }
+            if (!sensor.Value.HasValue) continue;
+
+            if (sensor.SensorType == SensorType.Load && sensor.Name.Contains("Used Space"))
+                drive.UsedPercent = sensor.Value.Value;
+
+            if (sensor.SensorType == SensorType.Data && sensor.Name.Contains("Used")) // En GB
+                drive.UsedSpace = sensor.Value.Value;
+            
+            if (sensor.SensorType == SensorType.Data && sensor.Name.Contains("Total")) // En GB
+                drive.TotalSpace = sensor.Value.Value;
+
+            if (sensor.SensorType == SensorType.Temperature)
+                drive.Temperature = sensor.Value.Value;
         }
         
-        // Ajouter le disque à la liste
-        stats.Drives.Add(driveData);
+        // On n'ajoute que si on a des données pertinentes
+        if (drive.TotalSpace > 0)
+            stats.Drives.Add(drive);
     }
 
-    /// <summary>
-    /// Extrait les statistiques réseau (Upload/Download en Ko/s)
-    /// </summary>
     private void ExtractNetworkStats(IHardware hardware, HardwareStats stats)
     {
         foreach (var sensor in hardware.Sensors)
         {
-            if (sensor.Value.HasValue)
-            {
-                // Vitesse d'envoi (Upload)
-                if (sensor.SensorType == SensorType.Throughput && 
-                    sensor.Name.Contains("Upload", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Conversion de bytes/s vers Ko/s
-                    stats.Network.UploadSpeed += sensor.Value.Value / 1024f;
-                }
-                
-                // Vitesse de réception (Download)
-                if (sensor.SensorType == SensorType.Throughput && 
-                    sensor.Name.Contains("Download", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Conversion de bytes/s vers Ko/s
-                    stats.Network.DownloadSpeed += sensor.Value.Value / 1024f;
-                }
-            }
+            if (!sensor.Value.HasValue) continue;
+
+            // Conversion Bytes/s -> Mbps (Megabits par seconde)
+            // Formule : (Bytes * 8) / 1,000,000
+            // Ou plus simple : (Bytes / 1024 / 1024) * 8
+            
+            float valueInMbps = (sensor.Value.Value * 8.0f) / 1_000_000.0f;
+
+            if (sensor.Name.Contains("Upload"))
+                stats.Network.UploadSpeed += valueInMbps;
+
+            if (sensor.Name.Contains("Download"))
+                stats.Network.DownloadSpeed += valueInMbps;
         }
     }
 
-    /// <summary>
-    /// Libère les ressources du Computer
-    /// </summary>
     public void Dispose()
     {
-        try
+        _semaphore?.Dispose();
+        _computer?.Close();
+    }
+
+// === À COLLER TOUT EN BAS DE LA CLASSE ===
+    private void ExtractTopProcesses(HardwareStats stats)
+    {
+        try 
         {
-            _semaphore?.Dispose();
-            _computer?.Close();
+            // On récupère tous les processus, on trie par mémoire, et on prend les 5 premiers
+            var processes = System.Diagnostics.Process.GetProcesses()
+                .OrderByDescending(p => p.WorkingSet64) // Trie par mémoire utilisée
+                .Take(5) // On garde le Top 5
+                .Select(p => new ProcessData {
+                    Name = p.ProcessName,
+                    Id = p.Id,
+                    MemoryUsedMb = p.WorkingSet64 / 1024f / 1024f // Conversion en MB
+                })
+                .ToList();
+
+            stats.TopProcesses = processes;
         }
-        catch (Exception ex)
+        catch 
         {
-            Console.Error.WriteLine($"Erreur lors de la fermeture des ressources: {ex.Message}");
+            // Si erreur (droits admin manquants par ex), on laisse vide
         }
     }
 }

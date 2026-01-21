@@ -1,65 +1,65 @@
 namespace hwMonitor.Models;
 
-/// <summary>
-/// Modèle représentant les statistiques matérielles du système
-/// </summary>
 public class HardwareStats
 {
+
+    public string OsName { get; set; } = "Unknown OS";
+    public string Uptime { get; set; } = "00:00:00"; // Format string pour l'affichage direct
     // === CPU ===
     public string CpuName { get; set; } = "N/A";
-    public float CpuLoad { get; set; } = 0f;
-    public float CpuTemp { get; set; } = 0f;
-    public float CpuPower { get; set; } = 0f;  // Consommation en Watts
-    public float CpuClockSpeed { get; set; } = 0f;  // Fréquence en MHz
-    
-    // === GPUs (Liste pour iGPU + dGPU) ===
+    public float CpuLoad { get; set; } = 0f;          // %
+    public float CpuTemp { get; set; } = 0f;          // °C
+    public float CpuPower { get; set; } = 0f;         // Watts
+    public float CpuClockSpeed { get; set; } = 0f;    // MHz
+    public float CpuFanSpeed { get; set; } = 0f;      // RPM (Nouveau !)
+
+    // === GPUs ===
     public List<GpuData> Gpus { get; set; } = new();
-    
+
     // === RAM ===
-    public float RamUsed { get; set; } = 0f;
-    public float RamTotal { get; set; } = 0f;
-    public float RamUsedPercent { get; set; } = 0f;
-    
-    // === Stockage (Liste pour plusieurs disques) ===
+    public float RamUsed { get; set; } = 0f;          // GB
+    public float RamTotal { get; set; } = 0f;         // GB
+    public float RamUsedPercent { get; set; } = 0f;   // %
+
+    // === Stockage ===
     public List<DriveData> Drives { get; set; } = new();
-    
+
     // === Réseau ===
     public NetworkData Network { get; set; } = new();
-    
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-}
 
-/// <summary>
-/// Données d'un GPU (iGPU ou dGPU)
-/// </summary>
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public List<ProcessData> TopProcesses { get; set; } = new();
+}
 public class GpuData
 {
     public string Name { get; set; } = "N/A";
-    public float Load { get; set; } = 0f;  // Charge en %
-    public float Temperature { get; set; } = 0f;  // Température en °C
-    public float MemoryUsed { get; set; } = 0f;  // Mémoire utilisée en Mo
-    public float MemoryTotal { get; set; } = 0f;  // Mémoire totale en Mo
-    public float FanSpeed { get; set; } = 0f;  // Vitesse ventilateur en %
-    public float Power { get; set; } = 0f;  // Consommation en Watts
+    public float Load { get; set; } = 0f;             // %
+    public float Temperature { get; set; } = 0f;      // °C
+    public float MemoryUsed { get; set; } = 0f;       // MB
+    public float MemoryTotal { get; set; } = 0f;      // MB
+    public float FanSpeed { get; set; } = 0f;         // % ou RPM
+    public float Power { get; set; } = 0f;            // Watts
 }
 
-/// <summary>
-/// Données d'un disque dur/SSD
-/// </summary>
 public class DriveData
 {
     public string Name { get; set; } = "N/A";
-    public float UsedSpace { get; set; } = 0f;  // Espace utilisé en Go
-    public float TotalSpace { get; set; } = 0f;  // Espace total en Go
-    public float UsedPercent { get; set; } = 0f;  // Pourcentage d'utilisation
-    public float? Temperature { get; set; } = null;  // Température (nullable car pas toujours dispo)
+    public string Mount { get; set; } = "";           // Lettre (C:\)
+    public float UsedSpace { get; set; } = 0f;        // GB
+    public float TotalSpace { get; set; } = 0f;       // GB
+    public float UsedPercent { get; set; } = 0f;      // %
+    public float? Temperature { get; set; } = null;   // °C
 }
 
-/// <summary>
-/// Statistiques réseau (Upload/Download)
-/// </summary>
 public class NetworkData
 {
-    public float UploadSpeed { get; set; } = 0f;  // Vitesse d'envoi en Ko/s
-    public float DownloadSpeed { get; set; } = 0f;  // Vitesse de réception en Ko/s
+    public float UploadSpeed { get; set; } = 0f;      // Mbps (Megabits/s)
+    public float DownloadSpeed { get; set; } = 0f;    // Mbps (Megabits/s)
+}
+
+public class ProcessData
+{
+    public string Name { get; set; }
+    public int Id { get; set; }
+    public float MemoryUsedMb { get; set; }
 }
