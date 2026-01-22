@@ -1,7 +1,3 @@
 {
-  "buildCommand": "cd torrent-dashboard && npm run build",
-  "devCommand": "cd torrent-dashboard && npm run dev",
-  "installCommand": "cd torrent-dashboard && npm install",
-  "framework": "nextjs",
-  "outputDirectory": "torrent-dashboard/.next"
+  "framework": "nextjs"
 }
