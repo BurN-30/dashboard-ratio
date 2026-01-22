@@ -30,7 +30,7 @@ export default function HardwareMonitorTabs() {
   const { stats, loading, error, isPolling, togglePolling, manualRefresh } =
     useHardwareStats({
       interval: 2000,
-      apiUrl:
+      url:
         process.env.NEXT_PUBLIC_HWMONITOR_API ||
         '/api/hardware/stats',
     });
