@@ -77,6 +77,7 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const [history, setHistory] = useState<{ time: string; cpu: number; ram: number }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isPolling, setIsPolling] = useState(true);
 
   // Utiliser useRef pour garder la dernière valeur sans déclencher de re-render
   const latestStatsRef = useRef<HardwareStats | null>(null);
@@ -123,9 +124,15 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
 
   useEffect(() => {
     fetchStats();
+    
+    if (!isPolling) return;
+
     const timer = setInterval(fetchStats, interval);
     return () => clearInterval(timer);
-  }, [fetchStats, interval]);
+  }, [fetchStats, interval, isPolling]);
 
-  return { stats, history, error, loading };
+  const togglePolling = () => setIsPolling((prev) => !prev);
+  const manualRefresh = () => fetchStats();
+
+  return { stats, history, error, loading, isPolling, togglePolling, manualRefresh };
 }
