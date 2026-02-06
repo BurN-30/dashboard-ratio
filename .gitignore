@@ -1,6 +1,26 @@
 # Secrets
 .env
 .env.local
+*.env
+SSHOVH.txt
+contexte.md
+fiche-memo.md
+dashboard-v2/backend/.env
+dashboard-v2/hw-agent/.env
+dashboard-v2/frontend/.env.local
+
+# Claude Code
+.claude/
+
+# Windows artifacts
+nul
+
+# Logs
+*.log
+server.log
+
+# SQLite databases
+*.db
 
 # Python
 __pycache__/
