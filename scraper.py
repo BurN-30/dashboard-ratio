@@ -299,11 +299,15 @@ def main():
         browser = p.chromium.launch(headless=True)
         context = browser.new_context()
         page = context.new_page()
+        
+        # Augmenter le timeout global à 60 secondes (au lieu de 30s par défaut)
+        page.set_default_timeout(60000)
 
         for site in SITES:
             print(f"-> Traitement de : {site['name']}")
             try:
-                page.goto(site['login_url'])
+                # Augmenter le timeout pour goto() à 90 secondes pour les sites lents
+                page.goto(site['login_url'], timeout=90000)
                 try:
                     if page.locator('input[name="username"]').count() > 0:
                         if not site['username'] or not site['password']:
@@ -312,11 +316,11 @@ def main():
                             page.fill('input[name="username"]', site['username'])
                             page.fill('input[name="password"]', site['password'])
                             page.press('input[name="password"]', 'Enter')
-                            page.wait_for_load_state('networkidle')
+                            page.wait_for_load_state('networkidle', timeout=60000)
                 except Exception as login_err:
                     print(f"   Info Login: {login_err}")
                 
-                page.goto(site['profile_url'])
+                page.goto(site['profile_url'], timeout=90000)
                 time.sleep(2) 
 
                 if site['type'] == 'sharewood':
@@ -328,6 +332,8 @@ def main():
 
             except Exception as e:
                 print(f"   ❌ Erreur: {e}")
+                # En cas d'erreur, on ajoute des données vides pour ce tracker
+                final_data[site['name']] = {}
 
         browser.close()
 

@@ -10,6 +10,46 @@ var builder = WebApplication.CreateBuilder(args);
 // Définit une URL par défaut (surchargée si --urls ou ASPNETCORE_URLS est fourni)
 builder.WebHost.UseUrls("http://localhost:5056");
 
+// === LIRE LE TOKEN DEPUIS LES ARGUMENTS OU VARIABLES D'ENVIRONNEMENT ===
+// Priorité : 1. Arguments ligne de commande (--HWMONITOR_TOKEN)
+//            2. Variable d'environnement (HWMONITOR_TOKEN)
+//            3. appsettings.json
+string? hwMonitorToken = null;
+
+// Chercher dans les arguments (ex: --HWMONITOR_TOKEN mon_token)
+for (int i = 0; i < args.Length - 1; i++)
+{
+    if (args[i] == "--HWMONITOR_TOKEN" && !string.IsNullOrWhiteSpace(args[i + 1]))
+    {
+        hwMonitorToken = args[i + 1];
+        Console.WriteLine($"[CONFIG] Token chargé depuis les arguments CLI");
+        break;
+    }
+}
+
+// Si pas trouvé, chercher dans les variables d'environnement
+if (string.IsNullOrWhiteSpace(hwMonitorToken))
+{
+    hwMonitorToken = Environment.GetEnvironmentVariable("HWMONITOR_TOKEN");
+    if (!string.IsNullOrWhiteSpace(hwMonitorToken))
+    {
+        Console.WriteLine($"[CONFIG] Token chargé depuis la variable d'environnement");
+    }
+}
+
+// Si toujours pas trouvé, chercher dans appsettings.json
+if (string.IsNullOrWhiteSpace(hwMonitorToken))
+{
+    hwMonitorToken = builder.Configuration["HWMONITOR_TOKEN"];
+    if (!string.IsNullOrWhiteSpace(hwMonitorToken))
+    {
+        Console.WriteLine($"[CONFIG] Token chargé depuis appsettings.json");
+    }
+}
+
+// Stocker le token pour utilisation ultérieure
+builder.Configuration["HWMONITOR_TOKEN"] = hwMonitorToken ?? "";
+
 // Configuration de la sérialisation JSON (optimisé pour les performances)
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
