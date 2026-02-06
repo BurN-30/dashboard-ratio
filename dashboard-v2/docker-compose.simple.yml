@@ -1,0 +1,93 @@
+# docker-compose.simple.yml
+# Deployment simplifie pour utilisation avec Nginx reverse proxy externe.
+# Les ports sont exposes sur localhost, Nginx se charge du SSL et du routage.
+#
+# Usage:
+#   docker compose -f docker-compose.simple.yml up -d
+#   docker compose -f docker-compose.simple.yml logs -f
+#   docker compose -f docker-compose.simple.yml build --no-cache frontend
+
+services:
+  # ===========================================
+  # DATABASE - PostgreSQL
+  # ===========================================
+  db:
+    image: postgres:16-alpine
+    container_name: dashboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dashboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-dashboard}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dashboard}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # BACKEND - FastAPI
+  # ===========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dashboard-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - HW_AGENT_TOKEN=${HW_AGENT_TOKEN}
+      - SCRAPE_INTERVAL=${SCRAPE_INTERVAL:-3600}
+      - DOMAIN=${DOMAIN:-example.com}
+      # Tracker credentials
+      - SW_USER=${SW_USER}
+      - SW_PASS=${SW_PASS}
+      - SW_USERNAME=${SW_USERNAME}
+      - GF_USER=${GF_USER}
+      - GF_PASS=${GF_PASS}
+      - GF_USERNAME=${GF_USERNAME}
+      - TOS_USER=${TOS_USER}
+      - TOS_PASS=${TOS_PASS}
+      - TOS_USERNAME=${TOS_USERNAME}
+      - TORR9_USER=${TORR9_USER}
+      - TORR9_PASS=${TORR9_PASS}
+      - TORR9_USERNAME=${TORR9_USERNAME}
+      - GEMINI_USER=${GEMINI_USER}
+      - GEMINI_PASS=${GEMINI_PASS}
+      - GEMINI_USERNAME=${GEMINI_USERNAME}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================
+  # FRONTEND - Next.js
+  # ===========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://api.${DOMAIN:-example.com}
+    container_name: dashboard-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres-data:

@@ -1,0 +1,165 @@
+version: "3.8"
+
+services:
+  # ===========================================
+  # REVERSE PROXY - Traefik
+  # ===========================================
+  traefik:
+    image: traefik:v3.0
+    container_name: dashboard-traefik
+    restart: unless-stopped
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTPS automatique avec Let's Encrypt
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      # Redirection HTTP -> HTTPS
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certs:/letsencrypt
+    networks:
+      - dashboard-net
+
+  # ===========================================
+  # DATABASE - PostgreSQL
+  # ===========================================
+  db:
+    image: postgres:16-alpine
+    container_name: dashboard-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dashboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-dashboard}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - dashboard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dashboard}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # BACKEND - FastAPI
+  # ===========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dashboard-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - JWT_EXPIRE_HOURS=${JWT_EXPIRE_HOURS:-24}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - HW_AGENT_TOKEN=${HW_AGENT_TOKEN}
+      - SCRAPE_INTERVAL=${SCRAPE_INTERVAL:-3600}
+      # Tracker credentials
+      - SW_USER=${SW_USER}
+      - SW_PASS=${SW_PASS}
+      - SW_USERNAME=${SW_USERNAME}
+      - GF_USER=${GF_USER}
+      - GF_PASS=${GF_PASS}
+      - GF_USERNAME=${GF_USERNAME}
+      - TOS_USER=${TOS_USER}
+      - TOS_PASS=${TOS_PASS}
+      - TOS_USERNAME=${TOS_USERNAME}
+      - TORR9_USER=${TORR9_USER}
+      - TORR9_PASS=${TORR9_PASS}
+      - TORR9_USERNAME=${TORR9_USERNAME}
+      - GEMINI_USER=${GEMINI_USER}
+      - GEMINI_PASS=${GEMINI_PASS}
+      - GEMINI_USERNAME=${GEMINI_USERNAME}
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      # HTTP API
+      - "traefik.http.routers.backend.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+      # WebSocket support for hardware monitoring
+      - "traefik.http.middlewares.backend-headers.headers.customrequestheaders.Connection=keep-alive,Upgrade"
+      - "traefik.http.routers.backend.middlewares=backend-headers"
+    networks:
+      - dashboard-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================
+  # FRONTEND - Next.js
+  # ===========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dashboard-frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=https://api.${DOMAIN}
+    depends_on:
+      - backend
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+    networks:
+      - dashboard-net
+
+  # ===========================================
+  # HARDWARE AGENT (Optional - better on host)
+  # ===========================================
+  # NOTE: The hw-agent is best run directly on the host machine
+  # for accurate hardware stats. This containerized version has
+  # limited access to GPU and may not reflect host metrics accurately.
+  # To use on host instead, run: python hw-agent/agent.py
+  hw-agent:
+    build:
+      context: ./hw-agent
+      dockerfile: Dockerfile
+    container_name: dashboard-hw-agent
+    restart: unless-stopped
+    environment:
+      - BACKEND_WS_URL=ws://backend:8000/hardware/ws/agent
+      - HW_AGENT_TOKEN=${HW_AGENT_TOKEN}
+      - INTERVAL=2
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - dashboard-net
+    # Uncomment below for better host access (Linux only)
+    # privileged: true
+    # pid: host
+    profiles:
+      - with-agent  # Only start with: docker compose --profile with-agent up
+
+networks:
+  dashboard-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  traefik-certs:

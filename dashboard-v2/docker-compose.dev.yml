@@ -1,0 +1,50 @@
+# Version pour le developpement local (sans Traefik, sans HTTPS)
+version: "3.8"
+
+services:
+  # ===========================================
+  # DATABASE - PostgreSQL
+  # ===========================================
+  db:
+    image: postgres:16-alpine
+    container_name: dashboard-db-dev
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: dashboard
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================
+  # BACKEND - FastAPI (dev mode avec hot reload)
+  # ===========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: dashboard-backend-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://dashboard:devpassword@db:5432/dashboard
+      - JWT_SECRET=dev-secret-key-not-for-production
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_HOURS=24
+      - ADMIN_PASSWORD=admin
+      - HW_AGENT_TOKEN=dev-hw-token
+      - SCRAPE_INTERVAL=3600
+    volumes:
+      - ./backend/app:/app/app:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres-data-dev:
