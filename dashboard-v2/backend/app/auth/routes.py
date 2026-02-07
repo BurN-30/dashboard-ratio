@@ -2,7 +2,9 @@
 Routes d'authentification.
 """
 import hmac
-from fastapi import APIRouter, HTTPException, status
+import time
+from collections import defaultdict
+from fastapi import APIRouter, HTTPException, status, Request
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -11,6 +13,24 @@ from fastapi import Depends
 
 router = APIRouter()
 settings = get_settings()
+
+# Rate limiting: max 5 tentatives par minute par IP
+_MAX_ATTEMPTS = 5
+_WINDOW_SECONDS = 60
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+
+
+def _check_rate_limit(ip: str):
+    """Verifie si l'IP a depasse la limite de tentatives."""
+    now = time.time()
+    # Nettoyer les tentatives expirees
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _WINDOW_SECONDS]
+    if len(_login_attempts[ip]) >= _MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives. Reessayez dans 1 minute.",
+        )
+    _login_attempts[ip].append(now)
 
 
 class LoginRequest(BaseModel):
@@ -26,13 +46,17 @@ class LoginResponse(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, req: Request):
     """
     Authentifie l'utilisateur et retourne un JWT.
 
+    - Rate limit: 5 tentatives / minute par IP
     - Verifie le mot de passe contre ADMIN_PASSWORD
     - Retourne un token JWT signe
     """
+    client_ip = req.client.host if req.client else "unknown"
+    _check_rate_limit(client_ip)
+
     if not hmac.compare_digest(request.password, settings.admin_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

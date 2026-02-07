@@ -23,6 +23,7 @@ os.environ.update({
 from app.db.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.db.models import TrackerStats  # noqa: E402
+from app.auth.routes import _login_attempts  # noqa: E402
 
 # Engine SQLite en memoire pour les tests
 test_engine = create_async_engine("sqlite+aiosqlite://", echo=False)
@@ -45,6 +46,7 @@ app.dependency_overrides[get_db] = override_get_db
 @pytest.fixture(autouse=True)
 async def setup_db():
     """Cree et nettoie la base de test avant/apres chaque test."""
+    _login_attempts.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
