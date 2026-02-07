@@ -4,7 +4,7 @@ Gere les connexions des agents hardware et la diffusion aux clients.
 """
 import logging
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from fastapi import WebSocket
 import json
@@ -109,7 +109,7 @@ class HardwareManager:
                 os=data.get("os", ""),
                 uptime=data.get("uptime", ""),
                 hostname=data.get("hostname", ""),
-                timestamp=data.get("timestamp", datetime.utcnow().isoformat()),
+                timestamp=data.get("timestamp", datetime.now(timezone.utc).isoformat()),
                 agent_connected=True,
             )
 

@@ -2,7 +2,7 @@
 Routes API pour les scrapers.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -186,7 +186,7 @@ async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats):
             warnings_active=stats.warnings_active,
             hit_and_run=stats.hit_and_run,
             raw_data=stats.raw_data,
-            scraped_at=datetime.utcnow(),
+            scraped_at=datetime.now(timezone.utc),
         )
 
         db.add(db_stats)

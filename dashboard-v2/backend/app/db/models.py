@@ -1,7 +1,7 @@
 """
 Modeles SQLAlchemy pour la base de donnees.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Index
 from app.db.database import Base
 
@@ -35,7 +35,7 @@ class TrackerStats(Base):
     raw_data = Column(JSON, nullable=True)
 
     # Timestamps
-    scraped_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    scraped_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Index pour les requetes frequentes
     __table_args__ = (
@@ -94,7 +94,7 @@ class HardwareSnapshot(Base):
     raw_data = Column(JSON, nullable=True)
 
     # Timestamp
-    recorded_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    recorded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     def to_dict(self) -> dict:
         """Convertit le modele en dictionnaire."""

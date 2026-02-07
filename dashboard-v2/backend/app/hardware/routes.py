@@ -8,7 +8,7 @@ from typing import Optional
 import uuid
 
 from app.hardware.manager import hardware_manager
-from app.auth.jwt import get_current_user, TokenData
+from app.auth.jwt import get_current_user, verify_token, TokenData
 
 logger = logging.getLogger("dashboard.hardware")
 router = APIRouter()
@@ -43,13 +43,22 @@ async def hardware_agent_websocket(
 
 
 @router.websocket("/ws/client")
-async def hardware_client_websocket(websocket: WebSocket):
+async def hardware_client_websocket(
+    websocket: WebSocket,
+    token: str = Query(..., description="Token JWT d'authentification"),
+):
     """
     WebSocket pour les clients web (dashboard).
 
     Les clients recoivent les stats hardware en temps reel.
-    Note: L'auth est geree cote frontend (cookie/token).
+    Authentification par token JWT dans query string.
     """
+    try:
+        verify_token(token)
+    except Exception:
+        await websocket.close(code=4001, reason="Token invalide")
+        return
+
     client_id = str(uuid.uuid4())
     await hardware_manager.connect_client(websocket, client_id)
 

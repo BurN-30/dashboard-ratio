@@ -2,7 +2,7 @@
 Routes API principales pour les donnees du dashboard.
 Fournit les stats des trackers et l'historique.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +80,7 @@ async def get_latest_stats(
             if latest_timestamp is None or ts > latest_timestamp:
                 latest_timestamp = ts
 
-    response["_timestamp"] = latest_timestamp or int(datetime.utcnow().timestamp())
+    response["_timestamp"] = latest_timestamp or int(datetime.now(timezone.utc).timestamp())
 
     return response
 
@@ -97,7 +97,7 @@ async def get_stats_history(
 
     Format compatible avec l'ancien frontend (tableau de snapshots).
     """
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     query = (
         select(TrackerStats)
