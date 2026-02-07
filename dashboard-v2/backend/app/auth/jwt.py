@@ -1,7 +1,7 @@
 """
 Gestion des JWT (JSON Web Tokens) pour l'authentification.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
@@ -45,7 +45,7 @@ def create_access_token(
     if expires_delta is None:
         expires_delta = timedelta(hours=settings.jwt_expire_hours)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expire = now + expires_delta
 
     to_encode = {
