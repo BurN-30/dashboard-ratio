@@ -1,6 +1,7 @@
 """
 Routes d'authentification.
 """
+import hmac
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -32,7 +33,7 @@ async def login(request: LoginRequest):
     - Verifie le mot de passe contre ADMIN_PASSWORD
     - Retourne un token JWT signe
     """
-    if request.password != settings.admin_password:
+    if not hmac.compare_digest(request.password, settings.admin_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Mot de passe incorrect"

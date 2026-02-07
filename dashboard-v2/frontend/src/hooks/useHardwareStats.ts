@@ -125,10 +125,11 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'api.example.com';
-    const wsUrl = `${protocol}//${apiHost}/hardware/ws/client`;
+    const apiHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || window.location.host;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
+    const wsUrl = `${protocol}//${apiHost}/hardware/ws/client?token=${encodeURIComponent(token)}`;
 
-    console.log('[HW Stats] Connecting to WebSocket:', wsUrl);
+    console.log('[HW Stats] Connecting to WebSocket:', wsUrl.replace(/token=[^&]+/, 'token=***'));
 
     const connect = () => {
       const ws = new WebSocket(wsUrl);
@@ -197,7 +198,7 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
 
   const fetchStats = useCallback(async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.example.com';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.host}`;
       const response = await fetch(`${apiUrl}/hardware/stats`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,

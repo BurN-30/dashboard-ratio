@@ -4,7 +4,7 @@ Execute les scrapers a intervalle regulier en arriere-plan.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from playwright.async_api import async_playwright
 
@@ -27,7 +27,7 @@ async def _run_scheduled_scrape():
         return
 
     logger.info("Scraping automatique demarre pour %d tracker(s)", len(scrapers))
-    start = datetime.utcnow()
+    start = datetime.now(timezone.utc)
 
     try:
         async with async_playwright() as p:
@@ -50,7 +50,7 @@ async def _run_scheduled_scrape():
     except Exception as e:
         logger.error("Erreur globale scraping automatique: %s", e)
 
-    elapsed = (datetime.utcnow() - start).total_seconds()
+    elapsed = (datetime.now(timezone.utc) - start).total_seconds()
     logger.info("Scraping automatique termine en %.1fs", elapsed)
 
 
