@@ -1,6 +1,15 @@
 """Tests pour l'authentification JWT."""
 import pytest
 from httpx import AsyncClient
+from app.auth.routes import _login_attempts
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limit():
+    """Nettoie le compteur de rate limiting avant chaque test."""
+    _login_attempts.clear()
+    yield
+    _login_attempts.clear()
 
 
 class TestLogin:
@@ -36,6 +45,19 @@ class TestLogin:
         data = resp.json()
         # remember_me = 30 jours = 2592000 secondes
         assert data["token"]["expires_in"] == 2592000
+
+    async def test_login_rate_limit(self, client: AsyncClient):
+        """Verifie le rate limiting apres 5 tentatives echouees."""
+        for _ in range(5):
+            await client.post("/auth/login", json={"password": "wrong"})
+        # La 6eme doit etre bloquee
+        resp = await client.post("/auth/login", json={"password": "wrong"})
+        assert resp.status_code == 429
+
+    async def test_login_rate_limit_resets(self, client: AsyncClient):
+        """Apres reset du compteur, un login valide passe."""
+        resp = await client.post("/auth/login", json={"password": "testpass"})
+        assert resp.status_code == 200
 
 
 class TestLogout:
