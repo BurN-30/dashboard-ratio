@@ -115,11 +115,14 @@ class Torr9Scraper(BaseScraper):
             """Trouve la valeur sur la ligne suivant un keyword."""
             keyword_lower = keyword.lower()
             for i, line in enumerate(lines):
-                if keyword_lower in line.lower():
-                    # La valeur peut etre sur la meme ligne ou la suivante
-                    # Ex: "UPLOAD TOTAL\n50.0 GB" ou "RATIO ACTUEL\n22.87"
+                line_lower = line.lower().strip()
+                # Match exact ou en debut de ligne (evite "en seed" dans "temps de seed")
+                if line_lower == keyword_lower or line_lower.startswith(keyword_lower):
                     if i + 1 < len(lines):
-                        return lines[i + 1].strip()
+                        next_line = lines[i + 1].strip()
+                        # Verifier que la ligne suivante ressemble a une valeur (pas un label)
+                        if next_line and (re.search(r'\d', next_line) or next_line.lower() in ('n/a', '-')):
+                            return next_line
             return "0"
 
         def find_value_on_line(keyword: str) -> str:
