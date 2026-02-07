@@ -144,7 +144,8 @@ class BaseScraper(ABC):
 
         # Conversion des unites (Anglais -> Francais)
         replacements = {
-            "TiB": "To", "GiB": "Go", "MiB": "Mo", "KiB": "Ko"
+            "TiB": "To", "GiB": "Go", "MiB": "Mo", "KiB": "Ko",
+            "TB": "To", "GB": "Go", "MB": "Mo", "KB": "Ko",
         }
         for eng, fr in replacements.items():
             text = text.replace(eng, fr)
