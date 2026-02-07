@@ -15,11 +15,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Installer les navigateurs Playwright
-RUN playwright install chromium --with-deps
-
 # Creer utilisateur non-root
 RUN useradd --create-home --shell /bin/bash appuser
+
+# Installer les navigateurs Playwright dans un chemin partage
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN mkdir -p /opt/playwright && \
+    playwright install chromium --with-deps && \
+    chmod -R 755 /opt/playwright
 
 # Copier le code de l'application
 COPY --chown=appuser:appuser app/ ./app/
