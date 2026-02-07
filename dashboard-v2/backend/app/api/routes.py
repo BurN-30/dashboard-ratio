@@ -58,7 +58,7 @@ async def get_latest_stats(
     latest_timestamp = None
 
     for stat in stats_list:
-        response[stat.tracker_name] = {
+        tracker_data = {
             "ratio": str(stat.ratio) if stat.ratio else "0",
             "buffer": stat.buffer or "0",
             "vol_upload": stat.vol_upload or "0",
@@ -73,6 +73,14 @@ async def get_latest_stats(
             "warnings_active": stat.warnings_active or "0",
             "hit_and_run": stat.hit_and_run or "0",
         }
+
+        # Inclure les champs raw_data (real_ratio, seed_size, etc.)
+        if stat.raw_data and isinstance(stat.raw_data, dict):
+            for key, val in stat.raw_data.items():
+                if key not in tracker_data and val:
+                    tracker_data[key] = str(val)
+
+        response[stat.tracker_name] = tracker_data
 
         # Garder le timestamp le plus recent
         if stat.scraped_at:

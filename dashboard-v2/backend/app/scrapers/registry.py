@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Type
 from app.scrapers.base import BaseScraper, ScraperConfig
 from app.scrapers.unit3d import Unit3DScraper
 from app.scrapers.sharewood import SharewoodScraper
+from app.scrapers.torr9 import Torr9Scraper
 from app.config import get_settings
 
 logger = logging.getLogger("dashboard.scraper")
@@ -38,10 +39,11 @@ SITES_CONFIG: List[dict] = [
     },
     {
         "name": "Torr9",
-        "scraper_class": Unit3DScraper,
+        "scraper_class": Torr9Scraper,
         "login_url": "https://torr9.xyz/login",
-        "profile_url_template": "https://torr9.xyz/users/{username}",
+        "profile_url_template": "https://torr9.xyz/stats",  # Pas de profil standard
         "env_prefix": "torr9",
+        "login_username_override": lambda user: user.lower(),  # Torr9 exige lowercase
     },
     {
         "name": "Gemini",
@@ -86,13 +88,19 @@ def build_scrapers() -> Dict[str, BaseScraper]:
             logger.debug("%s: identifiants manquants, skip", site['name'])
             continue
 
+        # Certains trackers exigent une transformation du username (ex: lowercase)
+        login_user = user
+        override = site.get("login_username_override")
+        if override:
+            login_user = override(user)
+
         config = ScraperConfig(
             name=site["name"],
             login_url=site["login_url"],
             profile_url_template=site["profile_url_template"],
-            username=user,
+            username=login_user,
             password=password,
-            profile_username=profile_username or user,
+            profile_username=profile_username or login_user,
         )
 
         scraper_class: Type[BaseScraper] = site["scraper_class"]

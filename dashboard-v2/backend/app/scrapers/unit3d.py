@@ -1,6 +1,6 @@
 """
 Scraper pour les trackers utilisant UNIT3D.
-Compatible avec: Generation-Free, TheOldSchool, Torr9, Gemini-Tracker
+Compatible avec: Generation-Free, TheOldSchool, Gemini-Tracker
 """
 import logging
 from typing import Optional
@@ -58,57 +58,98 @@ class Unit3DScraper(BaseScraper):
             except:
                 return "0"
 
+        async def get_first_value(*labels: str, exact: bool = False) -> str:
+            """Essaye plusieurs labels et retourne le premier resultat non-nul."""
+            for label in labels:
+                val = await get_value(label, exact=exact)
+                if val and val != "0":
+                    return val
+            return "0"
+
         # Avertissements
-        warnings = await get_value("Avertissements actifs")
-        hit_run = await get_value("Hit and Run Count")
-        if hit_run == "0":
-            hit_run = await get_value("Compteur de Hit and Run")
+        warnings = await get_first_value(
+            "Avertissements actifs", "Active Warnings",
+        )
+
+        # Hit & Run (& et and)
+        hit_run = await get_first_value(
+            "Hit and Run Count", "Hit & Run",
+            "Compteur de Hit and Run", "Compteur de Hit & Run",
+        )
 
         # Temps de seed
-        seed_total = self.format_duration(await get_value("Durée totale des seeds"))
-        if seed_total == "0":
-            seed_total = self.format_duration(await get_value("Temps de seed total"))
+        seed_total = self.format_duration(await get_first_value(
+            "Durée totale des seeds", "Temps de seed total",
+            "Total Seedtime", "Total Seed Time",
+        ))
 
-        seed_avg = self.format_duration(await get_value("Temps de seed moyen"))
+        seed_avg = self.format_duration(await get_first_value(
+            "Temps de seed moyen", "Average Seedtime", "Avg Seed Time",
+        ))
 
-        seed_size = await get_value("Seeding Size")
-        if seed_size == "0":
-            seed_size = await get_value("Volume de Seed")
+        seed_size = await get_first_value(
+            "Seeding Size", "Volume de Seed", "Taille de seed",
+        )
 
         # Compteurs torrents
-        count_dl = await get_value("Total des téléchargés")
-        if count_dl == "0":
-            count_dl = await get_value("Total complétés")
+        count_dl = await get_first_value(
+            "Total des téléchargés", "Total complétés",
+            "Total Downloaded", "Total Completed",
+        )
 
-        count_seed = await get_value("Total en seed")
-        count_leech = await get_value("Total en leech")
+        count_seed = await get_first_value(
+            "Total en seed", "Total Seeding",
+        )
+
+        count_leech = await get_first_value(
+            "Total en leech", "Total Leeching",
+        )
 
         # Traffic
-        ratio = await get_value("Ratio")
-        real_ratio = await get_value("Real Ratio")
-        buffer = await get_value("Tampon")
+        ratio = await get_first_value("Ratio")
+        real_ratio = await get_first_value("Real Ratio", "Vrai Ratio")
 
-        vol_up = await get_value("Compte Envoyer (Total)")
-        if vol_up == "0":
-            vol_up = await get_value("Compte Uploader (Total)")
+        buffer = await get_first_value("Tampon", "Buffer")
 
-        vol_dl = await get_value("Compte Télécharger (Total)")
-        if vol_dl == "0":
-            vol_dl = await get_value("Compte Télécharger")
+        vol_up = await get_first_value(
+            "Compte Envoyer (Total)", "Compte Uploader (Total)",
+            "Upload (Total)", "Uploaded (Total)",
+        )
 
-        # Points / Recompenses
-        points = await get_value("Coupon", exact=True)
-        if points == "0" or points == "":
-            points = await get_value("Point Bonus", exact=True)
+        vol_dl = await get_first_value(
+            "Compte Télécharger (Total)", "Compte Télécharger",
+            "Download (Total)", "Downloaded (Total)",
+        )
 
-        fl_tokens = await get_value("Jetons Freeleech")
+        # Points / Recompenses — chaque tracker a son propre label
+        points = await get_first_value(
+            "Coupon", "Coupon Envoyer",      # Gen-Free
+            "Point Bonus", "Point Bonus Uploader",  # TOS
+            "G3M", "G3M Uploader",           # Gemini
+            "Bonus Points", "BON",           # English fallbacks
+        )
+
+        fl_tokens = await get_first_value(
+            "Jetons Freeleech", "Freeleech Tokens", "FL Tokens",
+        )
 
         # Donnees brutes supplementaires
+        torrent_up = await get_first_value(
+            "Torrent Envoyer", "Torrent Uploaded",
+        )
+        torrent_up_credited = await get_first_value(
+            "Torrent Envoyer (crédité)", "Torrent Uploaded (credited)",
+        )
+        torrent_dl = await get_first_value(
+            "Torrent Télécharger", "Torrent Downloaded",
+        )
+
         raw_data = {
             "real_ratio": real_ratio,
             "seed_size": seed_size,
-            "torrent_uploader": await get_value("Torrent Envoyer"),
-            "torrent_downloader": await get_value("Torrent Télécharger"),
+            "torrent_uploader": torrent_up,
+            "torrent_uploader_credited": torrent_up_credited,
+            "torrent_downloader": torrent_dl,
         }
 
         return ScrapedStats(
