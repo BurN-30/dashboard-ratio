@@ -9,6 +9,12 @@ interface CircularGaugeProps {
   color?: 'green' | 'blue' | 'red' | 'orange';
 }
 
+const textSizeMap = {
+  sm: 'text-2xl',
+  md: 'text-3xl',
+  lg: 'text-4xl',
+} as const;
+
 export default function CircularGauge({
   label,
   value,
@@ -18,23 +24,32 @@ export default function CircularGauge({
   color = 'green',
 }: CircularGaugeProps) {
   const percentage = Math.min((value / max) * 100, 100);
-  
+
   const sizeMap = {
-    sm: { size: 100, strokeWidth: 6, textSize: 24 },
-    md: { size: 140, strokeWidth: 7, textSize: 32 },
-    lg: { size: 180, strokeWidth: 8, textSize: 40 },
+    sm: { size: 100, strokeWidth: 6 },
+    md: { size: 140, strokeWidth: 7 },
+    lg: { size: 180, strokeWidth: 8 },
   };
 
   const colorMap = {
-    green: { gradient: 'from-green-400 to-green-600', text: 'text-green-400' },
-    blue: { gradient: 'from-blue-400 to-blue-600', text: 'text-blue-400' },
-    red: { gradient: 'from-red-400 to-red-600', text: 'text-red-400' },
-    orange: { gradient: 'from-orange-400 to-orange-600', text: 'text-orange-400' },
+    green: 'text-green-400',
+    blue: 'text-blue-400',
+    red: 'text-red-400',
+    orange: 'text-orange-400',
   };
 
-  const { size: svgSize, strokeWidth, textSize } = sizeMap[size];
-  const { gradient, text } = colorMap[color];
-  
+  const stopColors = {
+    green: ['#4ade80', '#16a34a'],
+    blue: ['#60a5fa', '#2563eb'],
+    red: ['#f87171', '#dc2626'],
+    orange: ['#fb923c', '#ea580c'],
+  };
+
+  const { size: svgSize, strokeWidth } = sizeMap[size];
+  const textClass = textSizeMap[size];
+  const textColor = colorMap[color];
+  const [stopStart, stopEnd] = stopColors[color];
+
   const radius = svgSize / 2 - strokeWidth;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
@@ -49,14 +64,14 @@ export default function CircularGauge({
             cy={svgSize / 2}
             r={radius}
             fill="none"
-            stroke="rgba(255, 255, 255, 0.1)"
+            className="stroke-gray-200 dark:stroke-white/10"
             strokeWidth={strokeWidth}
           />
           {/* Progress circle with gradient */}
           <defs>
             <linearGradient id={`gradient-${label}`} x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor={color === 'green' ? '#4ade80' : color === 'blue' ? '#60a5fa' : color === 'red' ? '#f87171' : '#fb923c'} />
-              <stop offset="100%" stopColor={color === 'green' ? '#16a34a' : color === 'blue' ? '#2563eb' : color === 'red' ? '#dc2626' : '#ea580c'} />
+              <stop offset="0%" stopColor={stopStart} />
+              <stop offset="100%" stopColor={stopEnd} />
             </linearGradient>
           </defs>
           <circle
@@ -75,15 +90,15 @@ export default function CircularGauge({
 
         {/* Center text */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-${textSize} font-bold ${text}`}>
+          <span className={`${textClass} font-bold ${textColor}`}>
             {value.toFixed(1)}
           </span>
-          <span className="text-xs text-gray-400">{unit}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{unit}</span>
         </div>
       </div>
 
       {/* Label */}
-      <p className="mt-4 text-sm font-semibold text-gray-300 text-center">{label}</p>
+      <p className="mt-4 text-sm font-semibold text-gray-600 dark:text-gray-300 text-center">{label}</p>
     </div>
   );
 }

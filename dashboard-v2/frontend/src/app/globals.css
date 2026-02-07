@@ -180,6 +180,24 @@
   If we ever want to remove these styles, we need to add an explicit border
   color utility to any element that depends on these defaults.
 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+@utility animate-slide-up {
+  animation: slideUp 0.4s ease-out both;
+}
+
 @layer base {
   *,
   ::after,
