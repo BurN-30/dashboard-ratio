@@ -8,7 +8,7 @@ import { fetchTorrentStats, fetchTorrentHistory } from "@/lib/api";
 import { AllStats, TrackerData } from "@/types/tracker";
 import dynamic from "next/dynamic";
 import RefreshButton from "@/components/RefreshButton";
-import LastUpdateInfo from "@/components/LastUpdateInfo";
+import LastScrapeIndicator from "@/components/LastScrapeIndicator";
 import DashboardShell from "@/components/common/DashboardShell";
 import SkeletonCard from "@/components/common/SkeletonCard";
 import TrackerCard from "@/components/tracker/TrackerCard";
@@ -126,9 +126,12 @@ export default function Home() {
   const trackerEntries = Object.entries(stats).filter(([name]) => name !== "_timestamp");
 
   return (
-    <DashboardShell footer={<LastUpdateInfo />}>
+    <DashboardShell>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tracker Stats</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tracker Stats</h1>
+          <LastScrapeIndicator timestamp={lastTimestamp} />
+        </div>
         <RefreshButton />
       </div>
 
