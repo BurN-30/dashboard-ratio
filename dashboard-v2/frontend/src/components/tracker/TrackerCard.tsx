@@ -9,15 +9,19 @@ interface TrackerCardProps {
   style?: React.CSSProperties;
 }
 
+// Username configurable via env var (pas de données personnelles dans le code)
+const TRACKER_USER = process.env.NEXT_PUBLIC_TRACKER_USERNAME || '';
+
 // Fragments d'URL construits dynamiquement (pas de lien complet en dur)
 const SP = (h: string, p: string): [string, string] => [h, p];
-const SHOP_MAP: Record<string, [string, string]> = {
-  'Sharewood': SP('www.sharewood.tv', '/bonus/your-username'),
+const buildShopMap = (user: string): Record<string, [string, string]> => ({
+  'Sharewood': SP('www.sharewood.tv', `/bonus/${user}`),
   'Torr9': SP('torr9.xyz', '/tokens'),
-  'TOS': SP('theoldschool.cc', '/users/your-username/transactions/create'),
-  'GF-FREE': SP('generation-free.org', '/users/your-username/transactions/create'),
-  'G3MINI TR4CK3R': SP('gemini-tracker.org', '/users/your-username/transactions/create'),
-};
+  'TOS': SP('theoldschool.cc', `/users/${user}/transactions/create`),
+  'GF-FREE': SP('generation-free.org', `/users/${user}/transactions/create`),
+  'G3MINI TR4CK3R': SP('gemini-tracker.org', `/users/${user}/transactions/create`),
+});
+const SHOP_MAP = TRACKER_USER ? buildShopMap(TRACKER_USER) : {};
 
 export default function TrackerCard({ name, data, style }: TrackerCardProps) {
   const getStats = (d: TrackerData) => {

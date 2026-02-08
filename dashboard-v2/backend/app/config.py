@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Domain (pour CORS et configuration)
     domain: Optional[str] = Field(
         default=None,
-        description="Domaine principal (ex: example.com)"
+        description="Domaine principal (ex: dashboard.example.com)"
     )
     cors_origins: Optional[list[str]] = Field(
         default=None,
