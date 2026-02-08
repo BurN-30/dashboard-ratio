@@ -98,6 +98,7 @@ export default function TrackerCard({ name, data, style }: TrackerCardProps) {
               <span className="font-medium text-gray-900 dark:text-white">{stats.seed_time_total}</span>
             </div>
           </div>
+          {stats.seed_time_avg && stats.seed_time_avg !== '0' && (
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">Avg Seed Time</span>
             <div className="flex items-center gap-2">
@@ -105,6 +106,7 @@ export default function TrackerCard({ name, data, style }: TrackerCardProps) {
               <span className="font-medium text-gray-900 dark:text-white">{stats.seed_time_avg}</span>
             </div>
           </div>
+          )}
         </div>
       </div>
     </DashboardCard>
