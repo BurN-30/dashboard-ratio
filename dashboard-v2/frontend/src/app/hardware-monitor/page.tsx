@@ -300,10 +300,14 @@ export default function HardwareMonitor() {
                         color="bg-purple-400/70"
                       />
 
-                      <div className="grid grid-cols-2 gap-2 mt-3">
+                      <div className="grid grid-cols-3 gap-2 mt-3">
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded text-center">
                           <span className="text-[10px] text-gray-500 block">Temp</span>
                           <span className="text-sm font-bold text-orange-400">{gpu.temperature > 0 ? `${gpu.temperature}°C` : 'N/A'}</span>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded text-center">
+                          <span className="text-[10px] text-gray-500 block">Power</span>
+                          <span className="text-sm font-bold text-yellow-400">{gpu.power > 0 ? `${gpu.power.toFixed(0)}W` : 'N/A'}</span>
                         </div>
                         <div className="bg-gray-50 dark:bg-gray-800/50 p-2 rounded text-center">
                           <span className="text-[10px] text-gray-500 block">Fan</span>
