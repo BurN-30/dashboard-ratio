@@ -31,6 +31,11 @@ export interface NetworkData {
   downloadSpeed: number;
 }
 
+export interface DiskTempData {
+  name: string;
+  temp: number;
+}
+
 export interface HardwareStats {
   osName: string;
   uptime: string;
@@ -47,6 +52,7 @@ export interface HardwareStats {
   ramTotal: number;
   ramUsedPercent: number;
   drives: DriveData[];
+  diskTemps: DiskTempData[];
   network: NetworkData;
   timestamp: string;
 }
@@ -99,6 +105,10 @@ function transformAgentData(data: any): HardwareStats {
       totalSpace: drive.total_gb || 0,
       usedPercent: drive.percent || 0,
       temperature: null,
+    })),
+    diskTemps: (data.disk_temps || []).map((dt: any) => ({
+      name: dt.name || '',
+      temp: dt.temp || 0,
     })),
     network: {
       uploadSpeed: network.upload_speed || 0,
