@@ -1,19 +1,19 @@
 """
 Routes API pour les scrapers.
 """
+import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
 
 logger = logging.getLogger("dashboard.scraper")
 
 from app.auth.jwt import get_current_user, TokenData
-from app.db.database import get_db
+from app.db.database import async_session
 from app.db.models import TrackerStats
 from app.scrapers.registry import (
     get_scrapers,
@@ -70,7 +70,6 @@ async def get_available_scrapers(user: TokenData = Depends(get_current_user)):
 async def run_all_scrapers(
     background_tasks: BackgroundTasks,
     user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     """
     Lance le scraping de tous les trackers configures.
@@ -89,7 +88,7 @@ async def run_all_scrapers(
         raise HTTPException(status_code=500, detail="Aucun scraper configure")
 
     # Lancer en arriere-plan
-    background_tasks.add_task(run_scraping_task, db)
+    background_tasks.add_task(run_scraping_task)
 
     return ScrapeStatus(
         status="started",
@@ -102,7 +101,6 @@ async def run_single_scraper(
     tracker_name: str,
     background_tasks: BackgroundTasks,
     user: TokenData = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ):
     """Lance le scraping d'un tracker specifique."""
     global _scraping_in_progress
@@ -117,7 +115,7 @@ async def run_single_scraper(
     if not scraper:
         raise HTTPException(status_code=404, detail=f"Tracker '{tracker_name}' non trouve ou non configure")
 
-    background_tasks.add_task(run_scraping_task, db, tracker_name)
+    background_tasks.add_task(run_scraping_task, tracker_name=tracker_name)
 
     return ScrapeStatus(
         status="started",
@@ -126,9 +124,22 @@ async def run_single_scraper(
     )
 
 
-async def run_scraping_task(db: AsyncSession, tracker_name: Optional[str] = None):
+async def _scrape_single(name: str, scraper, browser) -> None:
+    """Scrape un tracker et sauvegarde en DB."""
+    try:
+        logger.info("Demarrage: %s", name)
+        stats = await scraper.run(browser)
+        async with async_session() as db:
+            await save_stats_to_db(db, stats)
+        logger.info("Termine: %s", name)
+    except Exception as e:
+        logger.error("Erreur %s: %s", name, e)
+
+
+async def run_scraping_task(db: AsyncSession = None, tracker_name: Optional[str] = None):
     """
     Tache de scraping (executee en arriere-plan).
+    Tous les trackers sont scrapes en parallele.
     """
     global _scraping_in_progress
     _scraping_in_progress = True
@@ -141,17 +152,12 @@ async def run_scraping_task(db: AsyncSession, tracker_name: Optional[str] = None
             if tracker_name:
                 scrapers = {tracker_name: scrapers[tracker_name]}
 
-            for name, scraper in scrapers.items():
-                try:
-                    logger.info("Demarrage: %s", name)
-                    stats = await scraper.run(browser)
-
-                    # Sauvegarder en DB
-                    await save_stats_to_db(db, stats)
-                    logger.info("Termine: %s", name)
-
-                except Exception as e:
-                    logger.error("Erreur %s: %s", name, e)
+            # Scraper tous les trackers en parallele
+            tasks = [
+                _scrape_single(name, scraper, browser)
+                for name, scraper in scrapers.items()
+            ]
+            await asyncio.gather(*tasks)
 
             await browser.close()
 

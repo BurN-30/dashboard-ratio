@@ -206,4 +206,12 @@ class BaseScraper(ABC):
         text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
         text = re.sub(r'\s+', ' ', text).strip()
 
-        return text
+        # Tronquer aux segments significatifs
+        # Avec annees → 2 segments, sinon → 3 segments
+        segments = text.split()
+        if segments and 'a' in segments[0]:
+            segments = segments[:2]
+        else:
+            segments = segments[:3]
+
+        return ' '.join(segments)
