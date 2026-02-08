@@ -3,19 +3,17 @@
 Hardware Agent V2 - Collecte avancée des stats hardware via WebSocket.
 
 Fonctionnalités:
-- CPU: usage, fréquence, cores, nom via WMI
+- CPU: usage, fréquence, cores, nom via WMI, temp/power/fan via LHM WMI
 - RAM: usage, détails
-- GPU: NVIDIA via GPUtil
-- Disques: noms via WMI, usage
+- GPU: NVIDIA via nvidia-smi
+- Disques: noms via WMI, usage, températures via LHM WMI
 - Réseau: vitesse up/down
 - Processus: top 5 par RAM
 - Système: OS, uptime
-- Optionnel: LibreHardwareMonitor pour temp/power/fan
 
 Configuration via .env:
     WS_URL=wss://api.dashboard.example.com/hardware/ws/agent
     HW_AGENT_TOKEN=your-secret-token
-    LHM_URL=http://localhost:8085 (optionnel)
 """
 import os
 import sys
@@ -38,7 +36,6 @@ load_dotenv()
 WS_URL = os.getenv("WS_URL", "ws://localhost:8000/hardware/ws/agent")
 HW_AGENT_TOKEN = os.getenv("HW_AGENT_TOKEN", "")
 INTERVAL = int(os.getenv("INTERVAL", "2"))
-LHM_URL = os.getenv("LHM_URL", "")  # LibreHardwareMonitor Web Server URL
 
 # Cache pour calcul des vitesses réseau
 _last_net_io = None
@@ -118,12 +115,17 @@ def get_os_info() -> Dict[str, str]:
     except Exception:
         pass
 
-    # Uptime
+    # Uptime en jours/heures/minutes
     boot_time = datetime.fromtimestamp(psutil.boot_time())
     uptime_delta = datetime.now() - boot_time
-    hours, remainder = divmod(int(uptime_delta.total_seconds()), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    total_seconds = int(uptime_delta.total_seconds())
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, _ = divmod(remainder, 60)
+    if days > 0:
+        uptime_str = f"{days}j {hours}h {minutes}min"
+    else:
+        uptime_str = f"{hours}h {minutes}min"
 
     return {
         "name": os_name,
@@ -298,104 +300,70 @@ def get_top_processes(n: int = 5) -> List[Dict[str, Any]]:
     return processes[:n]
 
 
-def try_get_lhm_data() -> Optional[Dict[str, Any]]:
-    """Essaie de récupérer les données de LibreHardwareMonitor."""
-    if not LHM_URL:
-        return None
-
-    try:
-        import urllib.request
-        with urllib.request.urlopen(f"{LHM_URL}/data.json", timeout=2) as response:
-            return json.loads(response.read().decode())
-    except Exception:
-        return None
-
-
-def parse_lhm_data(lhm_data: Dict) -> Dict[str, Any]:
-    """Parse les données LHM pour extraire temp/power/fan."""
+def get_lhm_sensors() -> Dict[str, Any]:
+    """Récupère les capteurs via LibreHardwareMonitor WMI (root/LibreHardwareMonitor)."""
     result = {
         "cpu_temp": None,
         "cpu_power": None,
         "cpu_fan": None,
-        "gpu_temp": None,
-        "gpu_power": None,
-        "gpu_fan": None,
+        "hdd_temps": {},  # identifier -> temp °C
     }
 
-    if not lhm_data:
-        return result
-
-    def parse_value(value: str, unit: str) -> Optional[float]:
-        """Parse une valeur en enlevant l'unité."""
-        try:
-            return float(value.replace(unit, "").replace(",", ".").strip())
-        except:
-            return None
-
-    def find_values(node, path=""):
-        """Parcours récursif pour trouver les valeurs."""
-        if isinstance(node, dict):
-            text = node.get("Text", "")
-            value = node.get("Value", "")
-            sensor_type = node.get("Type", "")
-
-            # CPU Temperature - chercher "CPU Package" sous un CPU Intel/AMD
-            if ("Intel Core" in path or "AMD" in path) and text == "CPU Package" and sensor_type == "Temperature":
-                val = parse_value(value, "°C")
-                if val is not None:
-                    result["cpu_temp"] = val
-
-            # CPU Power - chercher "CPU Package" dans Powers
-            if ("Intel Core" in path or "AMD" in path) and text == "CPU Package" and sensor_type == "Power":
-                val = parse_value(value, "W")
-                if val is not None:
-                    result["cpu_power"] = val
-
-            # CPU Fan - chercher ventilateur/pompe avec RPM > 0
-            if "Fan" in text and sensor_type == "Fan" and "NVIDIA" not in path and "GPU" not in text:
-                val = parse_value(value, "RPM")
-                if val is not None and val > 0:
-                    if result["cpu_fan"] is None or "Pump" in text:
-                        result["cpu_fan"] = int(val)
-
-            # GPU Temperature - chercher "GPU Core" sous NVIDIA/AMD
-            if ("NVIDIA" in path or "AMD Radeon" in path) and text == "GPU Core" and sensor_type == "Temperature":
-                val = parse_value(value, "°C")
-                if val is not None:
-                    result["gpu_temp"] = val
-
-            # GPU Fan
-            if ("NVIDIA" in path or "AMD Radeon" in path) and text == "GPU" and sensor_type == "Fan":
-                val = parse_value(value, "RPM")
-                if val is not None:
-                    result["gpu_fan"] = int(val)
-
-            for child in node.get("Children", []):
-                find_values(child, f"{path}/{text}")
-
-    find_values(lhm_data)
-    return result
-
-
-def get_cpu_temp_wmi() -> Optional[float]:
-    """Tente de lire la temperature CPU via WMI (MSAcpi_ThermalZoneTemperature)."""
     try:
         import subprocess
-        result = subprocess.run(
-            ['powershell', '-Command',
-             "Get-CimInstance MSAcpi_ThermalZoneTemperature -Namespace root/wmi -ErrorAction Stop "
-             "| Select-Object -First 1 -ExpandProperty CurrentTemperature"],
-            capture_output=True, text=True, timeout=5,
+        # Requête PowerShell unique pour tous les capteurs utiles
+        ps_script = (
+            "Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor "
+            "| Where-Object { $_.SensorType -in 'Temperature','Power','Fan' } "
+            "| Select-Object Name, Value, SensorType, Parent, Identifier "
+            "| ConvertTo-Json -Compress"
         )
-        if result.returncode == 0 and result.stdout.strip():
-            # WMI retourne en dixiemes de Kelvin
-            raw = float(result.stdout.strip())
-            celsius = (raw / 10) - 273.15
-            if 0 < celsius < 120:
-                return round(celsius, 1)
-    except Exception:
+        proc = subprocess.run(
+            ['powershell', '-NoProfile', '-Command', ps_script],
+            capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return result
+
+        sensors = json.loads(proc.stdout)
+        if isinstance(sensors, dict):
+            sensors = [sensors]
+
+        for s in sensors:
+            name = s.get("Name", "")
+            value = s.get("Value")
+            stype = s.get("SensorType", "")
+            parent = s.get("Parent", "")
+
+            if value is None:
+                continue
+            # PowerShell peut retourner des float avec virgule dans le JSON
+            if isinstance(value, str):
+                value = float(value.replace(",", "."))
+
+            # CPU Package Temperature
+            if name == "CPU Package" and stype == "Temperature" and "/intelcpu/" in parent:
+                result["cpu_temp"] = round(value, 1)
+
+            # CPU Package Power
+            elif name == "CPU Package" and stype == "Power" and "/intelcpu/" in parent:
+                result["cpu_power"] = round(value, 1)
+
+            # Fan/Pump avec RPM > 0 (prendre la pompe AIO si dispo, sinon premier fan actif)
+            elif stype == "Fan" and value > 0 and "/gpu" not in parent:
+                if result["cpu_fan"] is None or "Pump" in name:
+                    result["cpu_fan"] = int(value)
+
+            # HDD/NVMe temperatures
+            elif stype == "Temperature" and ("/hdd/" in parent or "/nvme/" in parent):
+                result["hdd_temps"][parent] = round(value, 1)
+
+    except FileNotFoundError:
         pass
-    return None
+    except Exception as e:
+        print(f"[LHM] Erreur: {e}")
+
+    return result
 
 
 def collect_all_stats() -> Dict[str, Any]:
@@ -403,34 +371,68 @@ def collect_all_stats() -> Dict[str, Any]:
     os_info = get_os_info()
     cpu = get_cpu_stats()
     gpu = get_gpu_stats()
+    storage = get_storage_stats()
 
-    # Essayer LHM pour les données avancées
-    lhm_data = try_get_lhm_data()
-    if lhm_data:
-        lhm_parsed = parse_lhm_data(lhm_data)
-        if lhm_parsed["cpu_temp"]:
-            cpu["temp"] = lhm_parsed["cpu_temp"]
-        if lhm_parsed["cpu_power"]:
-            cpu["power"] = lhm_parsed["cpu_power"]
-        if lhm_parsed["cpu_fan"]:
-            cpu["fan_speed"] = lhm_parsed["cpu_fan"]
+    # LHM WMI pour temp/power/fan CPU + HDD temps
+    lhm = get_lhm_sensors()
+    if lhm["cpu_temp"] is not None:
+        cpu["temp"] = lhm["cpu_temp"]
+    if lhm["cpu_power"] is not None:
+        cpu["power"] = lhm["cpu_power"]
+    if lhm["cpu_fan"] is not None:
+        cpu["fan_speed"] = lhm["cpu_fan"]
 
-    # Fallback WMI pour la temp CPU si LHM n'a rien donne
-    if cpu["temp"] is None:
-        cpu["temp"] = get_cpu_temp_wmi()
+    # Températures HDD/NVMe
+    disk_temps = _get_disk_temps(lhm["hdd_temps"])
 
     return {
         "cpu": cpu,
         "ram": get_ram_stats(),
         "gpu": gpu,
-        "storage": get_storage_stats(),
+        "storage": storage,
         "network": get_network_stats(),
         "processes": get_top_processes(5),
+        "disk_temps": disk_temps,
         "os": os_info["name"],
         "uptime": os_info["uptime"],
         "hostname": os_info["hostname"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _get_disk_temps(hdd_temps: Dict[str, float]) -> List[Dict[str, Any]]:
+    """Construit la liste des températures disques avec noms LHM."""
+    if not hdd_temps:
+        return []
+
+    # Récupérer les noms des disques physiques LHM (cache)
+    if not hasattr(_get_disk_temps, '_hw_map'):
+        try:
+            import subprocess
+            ps = (
+                "Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Hardware "
+                "| Where-Object HardwareType -in 'Storage' "
+                "| Select-Object Name, Identifier "
+                "| ConvertTo-Json -Compress"
+            )
+            proc = subprocess.run(
+                ['powershell', '-NoProfile', '-Command', ps],
+                capture_output=True, text=True, timeout=5,
+            )
+            hw_list = json.loads(proc.stdout) if proc.stdout.strip() else []
+            if isinstance(hw_list, dict):
+                hw_list = [hw_list]
+            _get_disk_temps._hw_map = {
+                h["Identifier"]: h["Name"] for h in hw_list
+            }
+        except Exception:
+            _get_disk_temps._hw_map = {}
+
+    result = []
+    for identifier, temp in sorted(hdd_temps.items()):
+        name = _get_disk_temps._hw_map.get(identifier, identifier)
+        result.append({"name": name, "temp": temp})
+    return result
 
 
 async def run_agent():
@@ -443,8 +445,6 @@ async def run_agent():
 
     print(f"[Agent] Serveur: {WS_URL}")
     print(f"[Agent] Intervalle: {INTERVAL}s")
-    if LHM_URL:
-        print(f"[Agent] LibreHardwareMonitor: {LHM_URL}")
     print()
 
     reconnect_delay = 5
