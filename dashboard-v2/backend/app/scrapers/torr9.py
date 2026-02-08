@@ -110,7 +110,7 @@ class Torr9Scraper(BaseScraper):
             return ScrapedStats(tracker_name=self.name, raw_data={"error": "page_empty"})
 
         lines = [l.strip() for l in body.split('\n') if l.strip()]
-        logger.info("[%s] /stats page: %d lines, first 15: %s", self.name, len(lines), lines[:15])
+        logger.info("[%s] /stats page: %d lines, all: %s", self.name, len(lines), lines)
 
         def find_value_after(keyword: str) -> str:
             """Trouve la valeur sur la ligne suivant un keyword."""
