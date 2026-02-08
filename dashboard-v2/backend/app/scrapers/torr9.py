@@ -62,13 +62,22 @@ class Torr9Scraper(BaseScraper):
 
             logger.info("[%s] URL apres login: %s", self.name, page.url)
 
+            # Sur Torr9 (Next.js), le login peut reussir mais l'URL reste /login
+            # momentanement. Verifier le contenu de la page.
+            try:
+                body = await page.locator('body').inner_text(timeout=5000)
+                body_lower = body.strip().lower()
+                logger.info("[%s] Page apres login: '%s'", self.name, body[:200])
+
+                # "Bon Retour" = message de succes sur Torr9
+                if "bon retour" in body_lower:
+                    logger.info("[%s] Login reussi (message 'Bon Retour' detecte)", self.name)
+                    return True
+            except:
+                pass
+
             if '/login' in page.url:
-                # Capturer le message d'erreur eventuel
-                try:
-                    body = await page.locator('body').inner_text(timeout=5000)
-                    logger.warning("[%s] Login echoue. Page content: %s", self.name, body[:300])
-                except:
-                    logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
+                logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
                 return False
 
             return True
