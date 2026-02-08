@@ -82,7 +82,7 @@ async def seeded_db():
         stats = [
             # Ancien snapshot d'abord (ID plus bas = plus ancien)
             TrackerStats(
-                tracker_name="Generation-Free",
+                tracker_name="GF-FREE",
                 ratio=2.3,
                 buffer="140 Go",
                 vol_upload="480 Go",
@@ -93,7 +93,7 @@ async def seeded_db():
             ),
             # Snapshots recents
             TrackerStats(
-                tracker_name="Generation-Free",
+                tracker_name="GF-FREE",
                 ratio=2.5,
                 buffer="150 Go",
                 vol_upload="500 Go",
@@ -119,7 +119,7 @@ async def seeded_db():
                 scraped_at=datetime(2026, 2, 6, 10, 0, 0),
             ),
             TrackerStats(
-                tracker_name="TheOldSchool",
+                tracker_name="TOS",
                 ratio=5.2,
                 buffer="400 Go",
                 vol_upload="520 Go",

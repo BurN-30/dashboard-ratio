@@ -32,7 +32,7 @@ export interface Unit3DStats {
 
 export interface SharewoodStats {
   // Counts
-  count_download: string;
+  count_downloaded: string;
   count_seed: string;
   count_leech: string;
 
@@ -43,14 +43,14 @@ export interface SharewoodStats {
   buffer: string;
 
   // Seed Time
-  time_seed_total: string;
-  time_seed_avg: string;
+  seed_time_total: string;
+  seed_time_avg: string;
 
   // Extra
   points_bonus: string;
   fl_tokens: string;
   hit_and_run: string;
-  
+
   // Warnings
   warnings_active?: string;
   warnings_limit?: string;

@@ -11,35 +11,17 @@ interface TrackerCardProps {
 
 export default function TrackerCard({ name, data, style }: TrackerCardProps) {
   const getStats = (d: TrackerData) => {
-    const isSharewood = name === 'Sharewood';
-
-    if (!isSharewood) {
-      const u = d as Unit3DStats;
-      return {
-        ratio: u.ratio,
-        seed_count: u.count_seed,
-        buffer: u.buffer,
-        points: u.points_bonus,
-        upload: u.vol_upload,
-        download: u.vol_download,
-        seed_time_total: u.seed_time_total,
-        seed_time_avg: u.seed_time_avg,
-        download_count: u.count_downloaded,
-      };
-    } else {
-      const s = d as SharewoodStats;
-      return {
-        ratio: s.ratio,
-        seed_count: s.count_seed,
-        buffer: s.buffer,
-        points: s.points_bonus,
-        upload: s.vol_upload,
-        download: s.vol_download,
-        seed_time_total: s.time_seed_total,
-        seed_time_avg: s.time_seed_avg,
-        download_count: s.count_download,
-      };
-    }
+    return {
+      ratio: d.ratio,
+      seed_count: d.count_seed,
+      buffer: d.buffer,
+      points: d.points_bonus,
+      upload: d.vol_upload,
+      download: d.vol_download,
+      seed_time_total: d.seed_time_total,
+      seed_time_avg: d.seed_time_avg,
+      download_count: d.count_downloaded,
+    };
   };
 
   const stats = getStats(data);
