@@ -71,33 +71,23 @@ class Torr9Scraper(BaseScraper):
                 await password_input.press('Enter')
                 logger.info("[%s] Enter presse (pas de bouton submit)", self.name)
 
-            # Attendre la navigation ou un changement de page
+            # Attendre que Next.js traite le login (SPA)
+            await page.wait_for_timeout(3000)
+
+            logger.info("[%s] URL apres login: %s", self.name, page.url)
+
+            # Tester en naviguant vers /stats — si login ok, on y reste
+            await page.goto("https://torr9.xyz/stats", timeout=30000)
             try:
-                await page.wait_for_url('**/!(login)**', timeout=10000)
-                logger.info("[%s] URL apres login: %s", self.name, page.url)
-                return True
+                await page.wait_for_load_state('networkidle', timeout=10000)
             except:
                 pass
 
-            # L'URL n'a peut-etre pas change, verifier le contenu
-            try:
-                await page.wait_for_load_state('networkidle', timeout=5000)
-            except:
-                pass
-
-            current_url = page.url
-            logger.info("[%s] URL apres login: %s", self.name, current_url)
-
-            # Si on n'est plus sur /login, c'est bon
-            if '/login' not in current_url:
-                return True
-
-            # Verifier si le formulaire de login est toujours present
-            if await page.locator('input[type="password"]').count() > 0:
-                body = await page.locator('body').inner_text(timeout=3000)
-                logger.warning("[%s] Login echoue. Page: %s", self.name, body[:200])
+            if '/login' in page.url:
+                logger.warning("[%s] Login echoue (redirige vers login depuis /stats)", self.name)
                 return False
 
+            logger.info("[%s] Login reussi, sur %s", self.name, page.url)
             return True
 
         except Exception as e:
@@ -115,7 +105,7 @@ class Torr9Scraper(BaseScraper):
         page.set_default_timeout(60000)
 
         try:
-            # Login
+            # Login (navigue aussi vers /stats si login reussi)
             logger.info("[%s] Navigation vers %s", self.name, self.config.login_url)
             await page.goto(self.config.login_url, timeout=90000)
 
@@ -123,14 +113,7 @@ class Torr9Scraper(BaseScraper):
                 logger.warning("[%s] Echec du login", self.name)
                 return ScrapedStats(tracker_name=self.name, raw_data={"error": "login_failed"})
 
-            # Scrape /stats
-            logger.info("[%s] Navigation vers /stats", self.name)
-            await page.goto("https://torr9.xyz/stats", timeout=60000)
-            try:
-                await page.wait_for_load_state('networkidle', timeout=15000)
-            except:
-                pass
-
+            # On est deja sur /stats apres login(), scraper directement
             stats = await self._scrape_stats(page)
 
             # Scrape /tokens pour le solde
