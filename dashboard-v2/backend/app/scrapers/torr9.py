@@ -190,7 +190,7 @@ class Torr9Scraper(BaseScraper):
             count_leech="0",
             count_downloaded=count_completed,
             seed_time_total=seed_total,
-            seed_time_avg="0",
+            seed_time_avg=None,
             warnings_active="0",
             hit_and_run="0",
             raw_data=raw_data,
