@@ -201,4 +201,9 @@ class BaseScraper(ABC):
         for pattern, replacement in replacements:
             text = re.sub(pattern, replacement, text)
 
+        # Format compact uniforme: "34a 7mo 3sem 1j 10h 28min 54s"
+        text = re.sub(r'(\d+)\s+([a-zA-Z]+)', r'\1\2', text)
+        text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+
         return text
