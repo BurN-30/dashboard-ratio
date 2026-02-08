@@ -41,11 +41,12 @@ export default function TrackerCard({ name, data, style }: TrackerCardProps) {
     if (!parts) return;
     // Construire l'URL au moment du clic uniquement
     const dest = ['https:/', parts[0], ...parts[1].split('/')].filter(Boolean).join('/');
-    // Ouvrir sans referrer ni lien tracable
-    const w = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    // Ouvrir sans referrer : on part de about:blank donc pas de Referer header
+    // On ne met PAS noopener dans window.open sinon il retourne null
+    const w = window.open('about:blank', '_blank');
     if (w) {
-      w.opener = null;
-      w.location.href = dest;
+      w.opener = null;          // couper le lien retour
+      w.location.href = dest;   // naviguer depuis about:blank = pas de referrer
     }
   }, [name]);
 
