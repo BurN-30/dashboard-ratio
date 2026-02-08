@@ -121,13 +121,19 @@ class Unit3DScraper(BaseScraper):
             "Download (Total)", "Downloaded (Total)",
         )
 
-        # Points / Recompenses — chaque tracker a son propre label
-        points = await get_first_value(
-            "Coupon", "Coupon Envoyer",      # Gen-Free
-            "Point Bonus", "Point Bonus Uploader",  # TOS
-            "G3M", "G3M Uploader",           # Gemini
-            "Bonus Points", "BON",           # English fallbacks
-        )
+        # Points / Recompenses — exact match d'abord pour eviter de matcher
+        # "Point Bonus Uploader" (volume) au lieu de "Point Bonus" (points)
+        points = await get_value("BON", exact=True)
+        if points == "0":
+            points = await get_value("Point Bonus", exact=True)
+        if points == "0":
+            points = await get_value("Coupon", exact=True)
+        if points == "0":
+            points = await get_value("G3M", exact=True)
+        if points == "0":
+            points = await get_first_value(
+                "Bonus Points", "Points Bonus",
+            )
 
         fl_tokens = await get_first_value(
             "Jetons Freeleech", "Freeleech Tokens", "FL Tokens",

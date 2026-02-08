@@ -17,14 +17,14 @@ settings = get_settings()
 # Configuration des sites supportes
 SITES_CONFIG: List[dict] = [
     {
-        "name": "Generation-Free",
+        "name": "GF-FREE",
         "scraper_class": Unit3DScraper,
         "login_url": "https://generation-free.org/login",
         "profile_url_template": "https://generation-free.org/users/{username}",
         "env_prefix": "gf",
     },
     {
-        "name": "TheOldSchool",
+        "name": "TOS",
         "scraper_class": Unit3DScraper,
         "login_url": "https://theoldschool.cc/login",
         "profile_url_template": "https://theoldschool.cc/users/{username}",
@@ -46,7 +46,7 @@ SITES_CONFIG: List[dict] = [
         "login_username_override": lambda user: user.lower(),  # Torr9 exige lowercase
     },
     {
-        "name": "Gemini",
+        "name": "G3MINI TR4CK3R",
         "scraper_class": Unit3DScraper,
         "login_url": "https://gemini-tracker.org/login",
         "profile_url_template": "https://gemini-tracker.org/users/{username}",

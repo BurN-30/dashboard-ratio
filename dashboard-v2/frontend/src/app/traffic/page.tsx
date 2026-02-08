@@ -81,22 +81,11 @@ function TrafficCard({ name, data, style }: { name: string; data: TrackerData; s
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">Traffic Volume</h3>
           <div className="space-y-2">
-            {isUnit3D(data) ? (
-              <>
-                <StatRow label="Upload (Total)" value={data.vol_upload} icon={ArrowUp} highlight />
-                <StatRow label="Download (Total)" value={data.vol_download} icon={ArrowDown} />
-                <StatRow label="Buffer" value={data.buffer} icon={ArrowRightLeft} />
-                <StatRow label="Real Ratio" value={data.real_ratio} icon={Percent} />
-                <StatRow label="Ratio" value={data.ratio} icon={Percent} highlight />
-              </>
-            ) : (
-              <>
-                <StatRow label="Upload" value={(data as SharewoodStats).vol_upload} icon={ArrowUp} highlight />
-                <StatRow label="Download" value={(data as SharewoodStats).vol_download} icon={ArrowDown} />
-                <StatRow label="Buffer" value={(data as SharewoodStats).buffer} icon={ArrowRightLeft} />
-                <StatRow label="Ratio" value={(data as SharewoodStats).ratio} icon={Percent} highlight />
-              </>
-            )}
+            <StatRow label="Upload (Total)" value={data.vol_upload} icon={ArrowUp} highlight />
+            <StatRow label="Download (Total)" value={data.vol_download} icon={ArrowDown} />
+            <StatRow label="Buffer" value={data.buffer} icon={ArrowRightLeft} />
+            {isUnit3D(data) && <StatRow label="Real Ratio" value={data.real_ratio} icon={Percent} />}
+            <StatRow label="Ratio" value={data.ratio} icon={Percent} highlight />
           </div>
         </div>
 
@@ -104,19 +93,9 @@ function TrafficCard({ name, data, style }: { name: string; data: TrackerData; s
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">Torrent Counts</h3>
           <div className="space-y-2">
-            {isUnit3D(data) ? (
-              <>
-                <StatRow label="Seeding" value={data.count_seed} icon={UploadCloud} />
-                <StatRow label="Leeching" value={data.count_leech} icon={DownloadCloud} />
-                <StatRow label="Downloaded" value={data.count_downloaded} icon={FileCheck} />
-              </>
-            ) : (
-              <>
-                <StatRow label="Seeding" value={(data as SharewoodStats).count_seed} icon={UploadCloud} />
-                <StatRow label="Leeching" value={(data as SharewoodStats).count_leech} icon={DownloadCloud} />
-                <StatRow label="Downloads" value={(data as SharewoodStats).count_download} icon={FileCheck} />
-              </>
-            )}
+            <StatRow label="Seeding" value={data.count_seed} icon={UploadCloud} />
+            <StatRow label="Leeching" value={data.count_leech} icon={DownloadCloud} />
+            <StatRow label="Downloaded" value={data.count_downloaded} icon={FileCheck} />
           </div>
         </div>
 
@@ -124,22 +103,11 @@ function TrafficCard({ name, data, style }: { name: string; data: TrackerData; s
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">Seeding Performance</h3>
           <div className="space-y-2">
-            {isUnit3D(data) ? (
-              <>
-                <StatRow label="Total Seed Time" value={data.seed_time_total} icon={Clock} />
-                <StatRow label="Avg Seed Time" value={data.seed_time_avg} icon={Clock} />
-                <StatRow label="Seeding Size" value={data.seed_size} icon={HardDrive} />
-                <StatRow label="Points" value={data.points_bonus} icon={Coins} highlight />
-                <StatRow label="FL Tokens" value={data.fl_tokens} icon={Coins} />
-              </>
-            ) : (
-              <>
-                <StatRow label="Total Seed Time" value={(data as SharewoodStats).time_seed_total} icon={Clock} />
-                <StatRow label="Avg Seed Time" value={(data as SharewoodStats).time_seed_avg} icon={Clock} />
-                <StatRow label="Bonus Points" value={(data as SharewoodStats).points_bonus} icon={Coins} highlight />
-                <StatRow label="FL Tokens" value={(data as SharewoodStats).fl_tokens} icon={Coins} />
-              </>
-            )}
+            <StatRow label="Total Seed Time" value={data.seed_time_total} icon={Clock} />
+            <StatRow label="Avg Seed Time" value={data.seed_time_avg} icon={Clock} />
+            {isUnit3D(data) && <StatRow label="Seeding Size" value={data.seed_size} icon={HardDrive} />}
+            <StatRow label="Points" value={data.points_bonus} icon={Coins} highlight />
+            <StatRow label="FL Tokens" value={data.fl_tokens} icon={Coins} />
           </div>
         </div>
 
@@ -147,21 +115,8 @@ function TrafficCard({ name, data, style }: { name: string; data: TrackerData; s
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-500 uppercase tracking-wider">Account Health</h3>
           <div className="space-y-2">
-            {isUnit3D(data) ? (
-              <>
-                <StatRow label="Active Warnings" value={data.warnings_active} highlight={data.warnings_active !== "0"} icon={AlertTriangle} />
-                <StatRow label="Hit & Run (Total)" value={data.hit_and_run} icon={AlertTriangle} />
-              </>
-            ) : (
-              <>
-                <StatRow
-                  label="Warnings / H&R"
-                  value={`${(data as SharewoodStats).warnings_active || "0"} / ${(data as SharewoodStats).warnings_limit || "3"} (${(data as SharewoodStats).hit_and_run} H&R)`}
-                  highlight={(data as SharewoodStats).warnings_active !== "0"}
-                  icon={AlertTriangle}
-                />
-              </>
-            )}
+            <StatRow label="Active Warnings" value={data.warnings_active || "0"} highlight={data.warnings_active !== "0" && data.warnings_active !== undefined} icon={AlertTriangle} />
+            <StatRow label="Hit & Run" value={data.hit_and_run} icon={AlertTriangle} />
           </div>
         </div>
       </div>
