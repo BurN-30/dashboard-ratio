@@ -17,67 +17,85 @@ class Torr9Scraper(BaseScraper):
     """Scraper pour Torr9.xyz (Next.js custom)."""
 
     async def login(self, page: Page) -> bool:
-        """Login sur Torr9."""
+        """Login sur Torr9 (Next.js SPA)."""
         try:
-            logger.info("[%s] URL apres nav login: %s", self.name, page.url)
+            logger.info("[%s] URL login: %s", self.name, page.url)
 
-            # Attendre que la page charge
+            # Attendre que la page charge completement
             try:
                 await page.wait_for_load_state('networkidle', timeout=15000)
             except:
                 pass
 
-            # Chercher le formulaire de login
-            username_count = await page.locator('input[name="username"]').count()
-            logger.info("[%s] Champs username trouves: %d", self.name, username_count)
-
-            if username_count == 0:
-                # Verifier aussi d'autres selecteurs possibles
-                email_count = await page.locator('input[name="email"]').count()
-                any_input = await page.locator('input[type="text"], input[type="email"]').count()
-                logger.info("[%s] Pas de champ username. email=%d, text/email inputs=%d", self.name, email_count, any_input)
-                # Si on est deja sur une page avec du contenu, on est peut-etre connecte
-                body = await page.locator('body').inner_text(timeout=5000)
-                logger.info("[%s] Body (100 premiers chars): %s", self.name, body[:100])
-                return True
-
             if not self.config.username or not self.config.password:
                 logger.warning("[%s] Identifiants manquants", self.name)
                 return False
 
-            logger.info("[%s] Saisie identifiants: user=%s", self.name, self.config.username)
-            await page.fill('input[name="username"]', self.config.username)
-            await page.fill('input[name="password"]', self.config.password)
+            # Trouver les champs de saisie — essayer plusieurs selecteurs
+            username_input = page.locator('input[name="username"]')
+            if await username_input.count() == 0:
+                username_input = page.locator('input[type="text"]').first
 
+            password_input = page.locator('input[name="password"]')
+            if await password_input.count() == 0:
+                password_input = page.locator('input[type="password"]').first
+
+            if await username_input.count() == 0 or await password_input.count() == 0:
+                logger.info("[%s] Pas de formulaire de login, deja connecte?", self.name)
+                return True
+
+            # Vider et remplir avec click + type pour les apps React
+            await username_input.click()
+            await username_input.fill('')
+            await page.keyboard.type(self.config.username, delay=50)
+
+            await password_input.click()
+            await password_input.fill('')
+            await page.keyboard.type(self.config.password, delay=50)
+
+            logger.info("[%s] Identifiants saisis, soumission...", self.name)
+
+            # Trouver le bouton de soumission par plusieurs methodes
             submit = page.locator('button[type="submit"]')
+            if await submit.count() == 0:
+                submit = page.locator('button:has-text("Se connecter")')
+            if await submit.count() == 0:
+                submit = page.locator('button:has-text("Connexion")')
+            if await submit.count() == 0:
+                submit = page.locator('button:has-text("Login")')
+
             if await submit.count() > 0:
-                await submit.click()
+                await submit.first.click()
+                logger.info("[%s] Bouton submit clique", self.name)
             else:
-                await page.press('input[name="password"]', 'Enter')
+                await password_input.press('Enter')
+                logger.info("[%s] Enter presse (pas de bouton submit)", self.name)
 
+            # Attendre la navigation ou un changement de page
             try:
-                await page.wait_for_load_state('networkidle', timeout=30000)
+                await page.wait_for_url('**/!(login)**', timeout=10000)
+                logger.info("[%s] URL apres login: %s", self.name, page.url)
+                return True
             except:
                 pass
 
-            logger.info("[%s] URL apres login: %s", self.name, page.url)
-
-            # Sur Torr9 (Next.js), le login peut reussir mais l'URL reste /login
-            # momentanement. Verifier le contenu de la page.
+            # L'URL n'a peut-etre pas change, verifier le contenu
             try:
-                body = await page.locator('body').inner_text(timeout=5000)
-                body_lower = body.strip().lower()
-                logger.info("[%s] Page apres login: '%s'", self.name, body[:200])
-
-                # "Bon Retour" = message de succes sur Torr9
-                if "bon retour" in body_lower:
-                    logger.info("[%s] Login reussi (message 'Bon Retour' detecte)", self.name)
-                    return True
+                await page.wait_for_load_state('networkidle', timeout=5000)
             except:
                 pass
 
-            if '/login' in page.url:
-                logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
+            current_url = page.url
+            logger.info("[%s] URL apres login: %s", self.name, current_url)
+
+            # Si on n'est plus sur /login, c'est bon
+            if '/login' not in current_url:
+                return True
+
+            # Verifier si le formulaire de login est toujours present
+            if await page.locator('input[type="password"]').count() > 0:
+                body = await page.locator('body').inner_text(timeout=3000)
+                logger.warning("[%s] Login echoue. Page: %s", self.name, body[:200])
                 return False
 
             return True
