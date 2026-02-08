@@ -19,9 +19,7 @@ class Torr9Scraper(BaseScraper):
     async def login(self, page: Page) -> bool:
         """Login sur Torr9 (Next.js SPA)."""
         try:
-            logger.info("[%s] URL login: %s", self.name, page.url)
-
-            # Attendre que la page charge completement
+            # Attendre que la page charge
             try:
                 await page.wait_for_load_state('networkidle', timeout=15000)
             except:
@@ -31,52 +29,33 @@ class Torr9Scraper(BaseScraper):
                 logger.warning("[%s] Identifiants manquants", self.name)
                 return False
 
-            # Trouver les champs de saisie — essayer plusieurs selecteurs
+            # Chercher le formulaire de login
             username_input = page.locator('input[name="username"]')
-            if await username_input.count() == 0:
-                username_input = page.locator('input[type="text"]').first
-
             password_input = page.locator('input[name="password"]')
-            if await password_input.count() == 0:
-                password_input = page.locator('input[type="password"]').first
 
             if await username_input.count() == 0 or await password_input.count() == 0:
-                logger.info("[%s] Pas de formulaire de login, deja connecte?", self.name)
+                logger.info("[%s] Pas de formulaire, deja connecte", self.name)
                 return True
 
-            # Vider et remplir avec click + type pour les apps React
-            await username_input.click()
-            await username_input.fill('')
-            await page.keyboard.type(self.config.username, delay=50)
+            # Remplir le formulaire
+            await page.fill('input[name="username"]', self.config.username)
+            await page.fill('input[name="password"]', self.config.password)
 
-            await password_input.click()
-            await password_input.fill('')
-            await page.keyboard.type(self.config.password, delay=50)
-
-            logger.info("[%s] Identifiants saisis, soumission...", self.name)
-
-            # Trouver le bouton de soumission par plusieurs methodes
+            # Soumettre
             submit = page.locator('button[type="submit"]')
-            if await submit.count() == 0:
-                submit = page.locator('button:has-text("Se connecter")')
-            if await submit.count() == 0:
-                submit = page.locator('button:has-text("Connexion")')
-            if await submit.count() == 0:
-                submit = page.locator('button:has-text("Login")')
-
             if await submit.count() > 0:
                 await submit.first.click()
-                logger.info("[%s] Bouton submit clique", self.name)
             else:
                 await password_input.press('Enter')
-                logger.info("[%s] Enter presse (pas de bouton submit)", self.name)
 
-            # Attendre que Next.js traite le login (SPA)
+            # Attendre la reponse du serveur
             await page.wait_for_timeout(3000)
+            try:
+                await page.wait_for_load_state('networkidle', timeout=5000)
+            except:
+                pass
 
-            logger.info("[%s] URL apres login: %s", self.name, page.url)
-
-            # Tester en naviguant vers /stats — si login ok, on y reste
+            # Verifier en naviguant vers /stats
             await page.goto("https://torr9.xyz/stats", timeout=30000)
             try:
                 await page.wait_for_load_state('networkidle', timeout=10000)
@@ -84,10 +63,10 @@ class Torr9Scraper(BaseScraper):
                 pass
 
             if '/login' in page.url:
-                logger.warning("[%s] Login echoue (redirige vers login depuis /stats)", self.name)
+                logger.warning("[%s] Login echoue (credentials invalides ou site bloque)", self.name)
                 return False
 
-            logger.info("[%s] Login reussi, sur %s", self.name, page.url)
+            logger.info("[%s] Login reussi", self.name)
             return True
 
         except Exception as e:
@@ -110,10 +89,9 @@ class Torr9Scraper(BaseScraper):
             await page.goto(self.config.login_url, timeout=90000)
 
             if not await self.login(page):
-                logger.warning("[%s] Echec du login", self.name)
                 return ScrapedStats(tracker_name=self.name, raw_data={"error": "login_failed"})
 
-            # On est deja sur /stats apres login(), scraper directement
+            # On est deja sur /stats apres login()
             stats = await self._scrape_stats(page)
 
             # Scrape /tokens pour le solde
@@ -141,16 +119,12 @@ class Torr9Scraper(BaseScraper):
         """Parse la page /stats de Torr9."""
         raw_data = {}
 
-        logger.info("[%s] URL page stats: %s", self.name, page.url)
-
         try:
             body = await page.locator('body').inner_text(timeout=10000)
         except:
-            logger.warning("[%s] Page stats vide", self.name)
             return ScrapedStats(tracker_name=self.name, raw_data={"error": "page_empty"})
 
         lines = [l.strip() for l in body.split('\n') if l.strip()]
-        logger.info("[%s] Stats page: %d lignes. Contenu: %s", self.name, len(lines), lines[:30])
 
         def find_value_after(keyword: str) -> str:
             """Trouve la valeur sur la ligne SUIVANT un keyword."""
@@ -196,12 +170,6 @@ class Torr9Scraper(BaseScraper):
                     j += 1
                 break
         seed_total = self.format_duration(" ".join(seed_parts)) if seed_parts else "0"
-
-        logger.info(
-            "[%s] Parsed: ratio=%s, up=%s, dl=%s, seed=%s, completed=%s, seed_time=%s",
-            self.name, ratio, vol_upload, vol_download, count_seed, count_completed,
-            " ".join(seed_parts) if seed_parts else "none"
-        )
 
         # Buffer = upload - download
         buffer = self._compute_buffer(vol_upload, vol_download)
