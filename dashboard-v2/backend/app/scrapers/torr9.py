@@ -63,7 +63,12 @@ class Torr9Scraper(BaseScraper):
             logger.info("[%s] URL apres login: %s", self.name, page.url)
 
             if '/login' in page.url:
-                logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
+                # Capturer le message d'erreur eventuel
+                try:
+                    body = await page.locator('body').inner_text(timeout=5000)
+                    logger.warning("[%s] Login echoue. Page content: %s", self.name, body[:300])
+                except:
+                    logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
                 return False
 
             return True

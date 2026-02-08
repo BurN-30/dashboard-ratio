@@ -43,7 +43,6 @@ SITES_CONFIG: List[dict] = [
         "login_url": "https://torr9.xyz/login",
         "profile_url_template": "https://torr9.xyz/stats",  # Pas de profil standard
         "env_prefix": "torr9",
-        "login_username_override": lambda user: user.lower(),  # Torr9 exige lowercase
     },
     {
         "name": "G3MINI TR4CK3R",
