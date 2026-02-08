@@ -103,7 +103,7 @@ class Torr9Scraper(BaseScraper):
                 pass
 
             tokens = await self._scrape_tokens(page)
-            stats.fl_tokens = tokens
+            stats.points_bonus = tokens
 
             logger.info("[%s] Scraping termine", self.name)
             return stats
@@ -197,18 +197,14 @@ class Torr9Scraper(BaseScraper):
         )
 
     async def _scrape_tokens(self, page: Page) -> str:
-        """Parse la page /tokens pour le solde."""
+        """Parse la page /tokens pour le solde (SOLDE ACTUEL: N tokens)."""
         try:
             body = await page.locator('body').inner_text(timeout=10000)
             lines = [l.strip() for l in body.split('\n') if l.strip()]
 
             for i, line in enumerate(lines):
-                lower = line.lower()
-                if "solde actuel" in lower or "balance" in lower or "token" in lower:
-                    # Chercher un nombre sur cette ligne ou la suivante
-                    nums = re.findall(r'(\d+)', line)
-                    if nums:
-                        return nums[0]
+                # Chercher specifiquement "SOLDE ACTUEL" (le vrai label du solde)
+                if line.lower() == "solde actuel":
                     if i + 1 < len(lines):
                         nums = re.findall(r'(\d+)', lines[i + 1])
                         if nums:
