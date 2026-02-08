@@ -130,6 +130,7 @@ export default function HardwareMonitor() {
   const downloadSpeed = stats?.network?.downloadSpeed || 0;
   const uploadSpeed = stats?.network?.uploadSpeed || 0;
   const drives = stats?.drives || [];
+  const diskTemps = stats?.diskTemps || [];
   const gpus = stats?.gpus || [];
   const processes = stats?.topProcesses || [];
   const isCpuCritical = cpuTemp > 80;
@@ -178,7 +179,7 @@ export default function HardwareMonitor() {
               style={{ animationDelay: '80ms' }}
             />
             <KpiCard
-              icon={Wifi}
+              icon={ArrowDown}
               title="Download"
               value={`${downloadSpeed.toFixed(1)}`}
               subtext="Mbps"
@@ -186,7 +187,7 @@ export default function HardwareMonitor() {
               style={{ animationDelay: '160ms' }}
             />
             <KpiCard
-              icon={Wifi}
+              icon={ArrowUp}
               title="Upload"
               value={`${uploadSpeed.toFixed(1)}`}
               subtext="Mbps"
@@ -374,6 +375,21 @@ export default function HardwareMonitor() {
                       </div>
                     </div>
                   ))}
+                  {diskTemps.length > 0 && (
+                    <div className="border-t border-gray-100 dark:border-gray-800 pt-3 mt-3">
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">Disk Temps</p>
+                      <div className="space-y-1">
+                        {diskTemps.map((dt, idx) => (
+                          <div key={idx} className="flex justify-between text-xs">
+                            <span className="text-gray-500 dark:text-gray-400 truncate" title={dt.name}>{dt.name}</span>
+                            <span className={`font-mono font-medium ${dt.temp > 50 ? 'text-red-400' : dt.temp > 40 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                              {dt.temp}°C
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </DashboardCard>
 
