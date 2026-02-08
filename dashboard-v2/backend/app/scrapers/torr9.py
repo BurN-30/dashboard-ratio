@@ -110,53 +110,53 @@ class Torr9Scraper(BaseScraper):
             return ScrapedStats(tracker_name=self.name, raw_data={"error": "page_empty"})
 
         lines = [l.strip() for l in body.split('\n') if l.strip()]
-        logger.info("[%s] /stats page: %d lines, all: %s", self.name, len(lines), lines)
 
         def find_value_after(keyword: str) -> str:
-            """Trouve la valeur sur la ligne suivant un keyword."""
+            """Trouve la valeur sur la ligne SUIVANT un keyword."""
             keyword_lower = keyword.lower()
             for i, line in enumerate(lines):
-                line_lower = line.lower().strip()
-                # Match exact ou en debut de ligne (evite "en seed" dans "temps de seed")
-                if line_lower == keyword_lower or line_lower.startswith(keyword_lower):
+                if line.lower() == keyword_lower:
                     if i + 1 < len(lines):
-                        next_line = lines[i + 1].strip()
-                        # Verifier que la ligne suivante ressemble a une valeur (pas un label)
-                        if next_line and (re.search(r'\d', next_line) or next_line.lower() in ('n/a', '-')):
-                            return next_line
+                        return lines[i + 1].strip()
             return "0"
 
-        def find_value_on_line(keyword: str) -> str:
-            """Trouve la valeur sur la meme ligne qu'un keyword."""
+        def find_value_before(keyword: str) -> str:
+            """Trouve la valeur sur la ligne PRECEDANT un keyword."""
             keyword_lower = keyword.lower()
-            for line in lines:
-                if keyword_lower in line.lower():
-                    # Extraire les nombres de la ligne
-                    nums = re.findall(r'[\d,.]+', line)
-                    if nums:
-                        return nums[-1]
+            for i, line in enumerate(lines):
+                if line.lower() == keyword_lower:
+                    if i > 0:
+                        return lines[i - 1].strip()
             return "0"
 
-        # Upload / Download totaux
+        # Upload / Download totaux (label AVANT valeur)
         vol_upload = find_value_after("upload total")
         vol_download = find_value_after("download total")
 
-        # Ratio
+        # Ratio (label AVANT valeur)
         ratio = find_value_after("ratio actuel")
-        if ratio == "0":
-            ratio = find_value_after("ratio")
 
-        # Compteurs
-        count_uploaded = find_value_after("torrents upload")
-        count_completed = find_value_after("torrents compl")
-        count_seed = find_value_after("en seed")
+        # Compteurs (valeur AVANT label sur Torr9!)
+        count_uploaded = find_value_before("torrents uploades")
+        if count_uploaded == "0":
+            count_uploaded = find_value_before("torrents uploadés")
+        count_completed = find_value_before("torrents completes")
+        if count_completed == "0":
+            count_completed = find_value_before("torrents complétés")
+        count_seed = find_value_before("en seed")
 
-        # Temps de seed
-        seed_total = find_value_after("temps de seed total")
-        if seed_total and seed_total != "0":
-            seed_total = self.format_duration(seed_total)
+        # Temps de seed (label AVANT, mais valeur peut etre sur 2 lignes: "6j" + "9h")
+        seed_parts = []
+        for i, line in enumerate(lines):
+            if line.lower() == "temps de seed total":
+                j = i + 1
+                while j < len(lines) and re.match(r'^[\d]+[a-zA-Z]', lines[j]):
+                    seed_parts.append(lines[j])
+                    j += 1
+                break
+        seed_total = self.format_duration(" ".join(seed_parts)) if seed_parts else "0"
 
-        # Buffer = upload - download (calculer si possible)
+        # Buffer = upload - download
         buffer = self._compute_buffer(vol_upload, vol_download)
 
         raw_data = {
