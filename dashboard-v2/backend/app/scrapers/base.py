@@ -153,30 +153,49 @@ class BaseScraper(ABC):
         if text.endswith(" B"):
             text = text[:-1] + "o"
 
+        # "0 o" ou "0 Go" etc. quand la valeur est juste zero
+        if re.match(r'^0\s*[A-Za-z]*o$', text):
+            return "0"
+
         return text
 
     @staticmethod
     def format_duration(text: Optional[str]) -> str:
-        """Formate une duree en francais."""
+        """Formate une duree en abbreviations courtes."""
         if not text or text == "0":
             return "0"
+
+        # D'abord remplacer les mots francais complets par des abbreviations
+        word_replacements = [
+            (r'années?', 'a'),
+            (r'an\(s\)', 'a'),
+            (r'ans?', 'a'),
+            (r'mois', 'mo'),
+            (r'semaines?', 'sem'),
+            (r'jours?', 'j'),
+            (r'heures?', 'h'),
+            (r'minutes?', 'min'),
+            (r'secondes?', 's'),
+        ]
+        for pattern, replacement in word_replacements:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
 
         # Ajouter espaces entre chiffres et lettres
         text = re.sub(r'(\d+)([a-zA-Z]+)', r'\1 \2', text)
         text = re.sub(r'([a-zA-Z]+)(\d+)', r'\1 \2', text)
-        text = text.replace("  ", " ").strip()
+        text = re.sub(r'\s+', ' ', text).strip()
 
-        # Remplacements d'unites
+        # Remplacements d'unites courtes (Y, M, D, H, etc.)
         replacements = [
-            (r'\b(\d+)\s*[Yy]\b', r'\1 an(s)'),
-            (r'\b(\d+)\s*M\b', r'\1 mois'),
-            (r'\b(\d+)\s*[Ww]\b', r'\1 sem'),
-            (r'\b(\d+)\s*S\b', r'\1 sem'),
-            (r'\b(\d+)\s*[Dd]\b', r'\1 j'),
-            (r'\b(\d+)\s*[Jj]\b', r'\1 j'),
-            (r'\b(\d+)\s*[Hh]\b', r'\1 h'),
-            (r'\b(\d+)\s*m\b', r'\1 min'),
-            (r'\b(\d+)\s*s\b', r'\1 s'),
+            (r'\b(\d+)\s*[Yy]\b', r'\1a'),
+            (r'\b(\d+)\s*M\b', r'\1mo'),
+            (r'\b(\d+)\s*[Ww]\b', r'\1sem'),
+            (r'\b(\d+)\s*S\b', r'\1sem'),
+            (r'\b(\d+)\s*[Dd]\b', r'\1j'),
+            (r'\b(\d+)\s*[Jj]\b', r'\1j'),
+            (r'\b(\d+)\s*[Hh]\b', r'\1h'),
+            (r'\b(\d+)\s*m\b', r'\1min'),
+            (r'\b(\d+)\s*s\b', r'\1s'),
         ]
 
         for pattern, replacement in replacements:

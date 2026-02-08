@@ -40,12 +40,12 @@ class TestStats:
         data = resp.json()
 
         # Verifie qu'on a les 3 trackers
-        assert "Generation-Free" in data
+        assert "GF-FREE" in data
         assert "Sharewood" in data
-        assert "TheOldSchool" in data
+        assert "TOS" in data
 
         # Verifie les valeurs GF (le plus recent)
-        gf = data["Generation-Free"]
+        gf = data["GF-FREE"]
         assert gf["ratio"] == "2.5"
         assert gf["buffer"] == "150 Go"
         assert gf["vol_upload"] == "500 Go"
@@ -58,7 +58,7 @@ class TestStats:
         resp = await client.get("/api/stats", headers=auth_headers)
         data = resp.json()
         # GF a 2 entrees (ratio 2.3 et 2.5), on doit avoir le plus recent (2.5)
-        assert data["Generation-Free"]["ratio"] == "2.5"
+        assert data["GF-FREE"]["ratio"] == "2.5"
 
 
 class TestHistory:
@@ -88,13 +88,13 @@ class TestHistory:
         self, client: AsyncClient, auth_headers: dict, seeded_db
     ):
         resp = await client.get(
-            "/api/history?tracker=Generation-Free", headers=auth_headers
+            "/api/history?tracker=GF-FREE", headers=auth_headers
         )
         assert resp.status_code == 200
         history = resp.json()
         # Tous les snapshots doivent contenir GF
         for snapshot in history:
-            assert "Generation-Free" in snapshot
+            assert "GF-FREE" in snapshot
 
     async def test_history_days_param(
         self, client: AsyncClient, auth_headers: dict, seeded_db
@@ -119,11 +119,11 @@ class TestTrackerStats:
         self, client: AsyncClient, auth_headers: dict, seeded_db
     ):
         resp = await client.get(
-            "/api/stats/Generation-Free", headers=auth_headers
+            "/api/stats/GF-FREE", headers=auth_headers
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["tracker"] == "Generation-Free"
+        assert data["tracker"] == "GF-FREE"
         assert data["count"] == 2  # 2 entrees GF dans le seed
 
     async def test_tracker_stats_unknown(

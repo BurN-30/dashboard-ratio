@@ -14,11 +14,11 @@ class TestScraperRegistry:
 
     def test_sites_config_names(self):
         names = [s["name"] for s in SITES_CONFIG]
-        assert "Generation-Free" in names
-        assert "TheOldSchool" in names
+        assert "GF-FREE" in names
+        assert "TOS" in names
         assert "Sharewood" in names
         assert "Torr9" in names
-        assert "Gemini" in names
+        assert "G3MINI TR4CK3R" in names
 
     def test_sites_config_has_required_keys(self):
         required = {"name", "scraper_class", "login_url", "profile_url_template", "env_prefix"}
