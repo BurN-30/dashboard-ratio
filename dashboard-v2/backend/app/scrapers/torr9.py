@@ -19,13 +19,33 @@ class Torr9Scraper(BaseScraper):
     async def login(self, page: Page) -> bool:
         """Login sur Torr9."""
         try:
-            if await page.locator('input[name="username"]').count() == 0:
+            logger.info("[%s] URL apres nav login: %s", self.name, page.url)
+
+            # Attendre que la page charge
+            try:
+                await page.wait_for_load_state('networkidle', timeout=15000)
+            except:
+                pass
+
+            # Chercher le formulaire de login
+            username_count = await page.locator('input[name="username"]').count()
+            logger.info("[%s] Champs username trouves: %d", self.name, username_count)
+
+            if username_count == 0:
+                # Verifier aussi d'autres selecteurs possibles
+                email_count = await page.locator('input[name="email"]').count()
+                any_input = await page.locator('input[type="text"], input[type="email"]').count()
+                logger.info("[%s] Pas de champ username. email=%d, text/email inputs=%d", self.name, email_count, any_input)
+                # Si on est deja sur une page avec du contenu, on est peut-etre connecte
+                body = await page.locator('body').inner_text(timeout=5000)
+                logger.info("[%s] Body (100 premiers chars): %s", self.name, body[:100])
                 return True
 
             if not self.config.username or not self.config.password:
                 logger.warning("[%s] Identifiants manquants", self.name)
                 return False
 
+            logger.info("[%s] Saisie identifiants: user=%s", self.name, self.config.username)
             await page.fill('input[name="username"]', self.config.username)
             await page.fill('input[name="password"]', self.config.password)
 
@@ -39,6 +59,8 @@ class Torr9Scraper(BaseScraper):
                 await page.wait_for_load_state('networkidle', timeout=30000)
             except:
                 pass
+
+            logger.info("[%s] URL apres login: %s", self.name, page.url)
 
             if '/login' in page.url:
                 logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
@@ -104,12 +126,16 @@ class Torr9Scraper(BaseScraper):
         """Parse la page /stats de Torr9."""
         raw_data = {}
 
+        logger.info("[%s] URL page stats: %s", self.name, page.url)
+
         try:
             body = await page.locator('body').inner_text(timeout=10000)
         except:
+            logger.warning("[%s] Page stats vide", self.name)
             return ScrapedStats(tracker_name=self.name, raw_data={"error": "page_empty"})
 
         lines = [l.strip() for l in body.split('\n') if l.strip()]
+        logger.info("[%s] Stats page: %d lignes. Contenu: %s", self.name, len(lines), lines[:30])
 
         def find_value_after(keyword: str) -> str:
             """Trouve la valeur sur la ligne SUIVANT un keyword."""
@@ -155,6 +181,12 @@ class Torr9Scraper(BaseScraper):
                     j += 1
                 break
         seed_total = self.format_duration(" ".join(seed_parts)) if seed_parts else "0"
+
+        logger.info(
+            "[%s] Parsed: ratio=%s, up=%s, dl=%s, seed=%s, completed=%s, seed_time=%s",
+            self.name, ratio, vol_upload, vol_download, count_seed, count_completed,
+            " ".join(seed_parts) if seed_parts else "none"
+        )
 
         # Buffer = upload - download
         buffer = self._compute_buffer(vol_upload, vol_download)
