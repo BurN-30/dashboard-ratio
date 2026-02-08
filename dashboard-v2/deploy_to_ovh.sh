@@ -4,11 +4,11 @@
 
 set -e
 
-# Configuration
-OVH_HOST="your-server-ip"
-OVH_USER="ubuntu"
-DOMAIN="example.com"
-DEPLOY_DIR="/home/ubuntu/dashboard-v2"
+# Configuration - Edit these values for your setup
+OVH_HOST="${DEPLOY_HOST:-your-server-ip}"
+OVH_USER="${DEPLOY_USER:-ubuntu}"
+DOMAIN="${DOMAIN:-example.com}"
+DEPLOY_DIR="${DEPLOY_DIR:-/home/ubuntu/dashboard-v2}"
 
 echo "========================================"
 echo "Dashboard V2 - OVH Deployment"
@@ -56,8 +56,7 @@ echo "2. Edit the .env file:"
 echo "   cd $DEPLOY_DIR && nano .env"
 echo ""
 echo "3. Configure these critical values:"
-echo "   - DOMAIN=$DOMAIN"
-echo "   - ACME_EMAIL=your-email@example.com"
+echo "   - DOMAIN=your-domain.com"
 echo "   - JWT_SECRET=(generate with: openssl rand -hex 32)"
 echo "   - ADMIN_PASSWORD=your-secure-password"
 echo "   - POSTGRES_PASSWORD=(generate with: openssl rand -hex 16)"
