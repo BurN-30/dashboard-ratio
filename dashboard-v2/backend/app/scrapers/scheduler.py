@@ -1,14 +1,14 @@
 """
 Planificateur de scraping automatique.
-Execute les scrapers a intervalle regulier en arriere-plan.
+Execute les scrapers a heures fixes : 8h, 14h, 20h (Europe/Paris).
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta, time as dt_time
+from zoneinfo import ZoneInfo
 
 from playwright.async_api import async_playwright
 
-from app.config import get_settings
 from app.scrapers.registry import get_scrapers
 from app.scrapers.routes import _scrape_single
 
@@ -16,6 +16,28 @@ logger = logging.getLogger("dashboard.scheduler")
 
 # Tache asyncio globale
 _scheduler_task: asyncio.Task | None = None
+
+# Heures de scraping (Europe/Paris)
+SCRAPE_TIMES = [dt_time(8, 0), dt_time(14, 0), dt_time(20, 0)]
+TZ = ZoneInfo("Europe/Paris")
+
+
+def _seconds_until_next_run() -> float:
+    """Calcule le nombre de secondes avant le prochain horaire de scraping."""
+    now = datetime.now(TZ)
+    today = now.date()
+
+    # Chercher le prochain horaire aujourd'hui ou demain
+    for t in SCRAPE_TIMES:
+        candidate = datetime.combine(today, t, tzinfo=TZ)
+        if candidate > now:
+            delta = (candidate - now).total_seconds()
+            return delta
+
+    # Tous les horaires d'aujourd'hui sont passes -> premier horaire demain
+    tomorrow = today + timedelta(days=1)
+    candidate = datetime.combine(tomorrow, SCRAPE_TIMES[0], tzinfo=TZ)
+    return (candidate - now).total_seconds()
 
 
 async def _run_scheduled_scrape():
@@ -49,23 +71,31 @@ async def _run_scheduled_scrape():
 
 
 async def _scheduler_loop():
-    """Boucle principale du planificateur."""
-    settings = get_settings()
-    interval = settings.scrape_interval
-
-    if interval <= 0:
-        logger.info("Scraping automatique desactive (SCRAPE_INTERVAL=%d)", interval)
-        return
+    """Boucle principale du planificateur a heures fixes."""
 
     logger.info(
-        "Planificateur demarre: scraping toutes les %d secondes (%d min)",
-        interval, interval // 60
+        "Planificateur demarre: scraping a %s (Europe/Paris)",
+        ", ".join(t.strftime("%Hh%M") for t in SCRAPE_TIMES),
     )
 
     # Attendre un peu au demarrage pour laisser l'app s'initialiser
     await asyncio.sleep(30)
 
     while True:
+        wait = _seconds_until_next_run()
+        next_run = datetime.now(TZ) + timedelta(seconds=wait)
+        logger.info(
+            "Prochain scraping dans %.0f min (%s)",
+            wait / 60,
+            next_run.strftime("%H:%M"),
+        )
+
+        try:
+            await asyncio.sleep(wait)
+        except asyncio.CancelledError:
+            logger.info("Planificateur arrete pendant l'attente")
+            break
+
         try:
             await _run_scheduled_scrape()
         except asyncio.CancelledError:
@@ -73,12 +103,6 @@ async def _scheduler_loop():
             break
         except Exception as e:
             logger.error("Erreur inattendue dans le planificateur: %s", e)
-
-        try:
-            await asyncio.sleep(interval)
-        except asyncio.CancelledError:
-            logger.info("Planificateur arrete pendant l'attente")
-            break
 
 
 def start_scheduler():
