@@ -9,9 +9,8 @@ from datetime import datetime, timezone
 from playwright.async_api import async_playwright
 
 from app.config import get_settings
-from app.db.database import async_session
 from app.scrapers.registry import get_scrapers
-from app.scrapers.routes import save_stats_to_db
+from app.scrapers.routes import _scrape_single
 
 logger = logging.getLogger("dashboard.scheduler")
 
@@ -33,17 +32,12 @@ async def _run_scheduled_scrape():
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
 
-            for name, scraper in scrapers.items():
-                try:
-                    logger.info("[Auto] Scraping: %s", name)
-                    stats = await scraper.run(browser)
-
-                    async with async_session() as db:
-                        await save_stats_to_db(db, stats)
-
-                    logger.info("[Auto] OK: %s", name)
-                except Exception as e:
-                    logger.error("[Auto] Erreur %s: %s", name, e)
+            # Scraper tous les trackers en parallele
+            tasks = [
+                _scrape_single(name, scraper, browser)
+                for name, scraper in scrapers.items()
+            ]
+            await asyncio.gather(*tasks)
 
             await browser.close()
 
