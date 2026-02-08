@@ -82,6 +82,7 @@ services:
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=https://api.${DOMAIN:-example.com}
+        - NEXT_PUBLIC_TRACKER_USERNAME=${TRACKER_USERNAME:-}
     container_name: dashboard-frontend
     restart: unless-stopped
     ports:
