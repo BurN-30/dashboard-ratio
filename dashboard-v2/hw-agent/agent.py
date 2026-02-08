@@ -172,26 +172,42 @@ def get_ram_stats() -> Dict[str, Any]:
 
 
 def get_gpu_stats() -> Optional[Dict[str, Any]]:
-    """Collecte les stats GPU NVIDIA."""
+    """Collecte les stats GPU NVIDIA via nvidia-smi."""
     try:
-        import GPUtil
-        gpus = GPUtil.getGPUs()
-
-        if not gpus:
+        import subprocess
+        result = subprocess.run(
+            [
+                'nvidia-smi',
+                '--query-gpu=name,temperature.gpu,utilization.gpu,memory.used,memory.total,fan.speed,power.draw',
+                '--format=csv,noheader,nounits',
+            ],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
             return None
 
-        gpu = gpus[0]
+        line = result.stdout.strip().split('\n')[0]
+        parts = [p.strip() for p in line.split(',')]
+        if len(parts) < 7:
+            return None
+
+        def safe_float(val: str) -> float:
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return 0
+
         return {
-            "name": gpu.name,  # Nom complet
-            "usage": round(gpu.load * 100, 1),
-            "temp": gpu.temperature,
-            "memory_used": round(gpu.memoryUsed, 0),
-            "memory_total": round(gpu.memoryTotal, 0),
-            "memory_percent": round((gpu.memoryUsed / gpu.memoryTotal) * 100, 1) if gpu.memoryTotal else 0,
-            "fan_speed": None,  # GPUtil ne fournit pas ça
-            "power": None,
+            "name": parts[0],
+            "usage": safe_float(parts[2]),
+            "temp": safe_float(parts[1]),
+            "memory_used": safe_float(parts[3]),
+            "memory_total": safe_float(parts[4]),
+            "memory_percent": round(safe_float(parts[3]) / safe_float(parts[4]) * 100, 1) if safe_float(parts[4]) else 0,
+            "fan_speed": safe_float(parts[5]),
+            "power": safe_float(parts[6]),
         }
-    except ImportError:
+    except FileNotFoundError:
         return None
     except Exception as e:
         print(f"[GPU] Erreur: {e}")
@@ -361,6 +377,27 @@ def parse_lhm_data(lhm_data: Dict) -> Dict[str, Any]:
     return result
 
 
+def get_cpu_temp_wmi() -> Optional[float]:
+    """Tente de lire la temperature CPU via WMI (MSAcpi_ThermalZoneTemperature)."""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ['powershell', '-Command',
+             "Get-CimInstance MSAcpi_ThermalZoneTemperature -Namespace root/wmi -ErrorAction Stop "
+             "| Select-Object -First 1 -ExpandProperty CurrentTemperature"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # WMI retourne en dixiemes de Kelvin
+            raw = float(result.stdout.strip())
+            celsius = (raw / 10) - 273.15
+            if 0 < celsius < 120:
+                return round(celsius, 1)
+    except Exception:
+        pass
+    return None
+
+
 def collect_all_stats() -> Dict[str, Any]:
     """Collecte toutes les stats hardware."""
     os_info = get_os_info()
@@ -377,6 +414,10 @@ def collect_all_stats() -> Dict[str, Any]:
             cpu["power"] = lhm_parsed["cpu_power"]
         if lhm_parsed["cpu_fan"]:
             cpu["fan_speed"] = lhm_parsed["cpu_fan"]
+
+    # Fallback WMI pour la temp CPU si LHM n'a rien donne
+    if cpu["temp"] is None:
+        cpu["temp"] = get_cpu_temp_wmi()
 
     return {
         "cpu": cpu,
