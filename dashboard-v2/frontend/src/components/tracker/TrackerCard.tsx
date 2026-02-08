@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock } from 'lucide-react';
 import { TrackerData, Unit3DStats, SharewoodStats } from '@/types/tracker';
 import DashboardCard from '@/components/common/DashboardCard';
@@ -8,6 +8,16 @@ interface TrackerCardProps {
   data: TrackerData;
   style?: React.CSSProperties;
 }
+
+// Fragments d'URL construits dynamiquement (pas de lien complet en dur)
+const SP = (h: string, p: string): [string, string] => [h, p];
+const SHOP_MAP: Record<string, [string, string]> = {
+  'Sharewood': SP('www.sharewood.tv', '/bonus/your-username'),
+  'Torr9': SP('torr9.xyz', '/tokens'),
+  'TOS': SP('theoldschool.cc', '/users/your-username/transactions/create'),
+  'GF-FREE': SP('generation-free.org', '/users/your-username/transactions/create'),
+  'G3MINI TR4CK3R': SP('gemini-tracker.org', '/users/your-username/transactions/create'),
+};
 
 export default function TrackerCard({ name, data, style }: TrackerCardProps) {
   const getStats = (d: TrackerData) => {
@@ -24,7 +34,23 @@ export default function TrackerCard({ name, data, style }: TrackerCardProps) {
     };
   };
 
+  const openShop = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const parts = SHOP_MAP[name];
+    if (!parts) return;
+    // Construire l'URL au moment du clic uniquement
+    const dest = ['https:/', parts[0], ...parts[1].split('/')].filter(Boolean).join('/');
+    // Ouvrir sans referrer ni lien tracable
+    const w = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    if (w) {
+      w.opener = null;
+      w.location.href = dest;
+    }
+  }, [name]);
+
   const stats = getStats(data);
+  const hasShop = name in SHOP_MAP;
 
   return (
     <DashboardCard className="animate-slide-up" style={style}>
@@ -52,9 +78,14 @@ export default function TrackerCard({ name, data, style }: TrackerCardProps) {
         </div>
         <div className="space-y-1">
           <p className="text-xs text-gray-500 uppercase">Points Bonus</p>
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-yellow-500" />
-            <p className="text-lg font-bold text-brand-500">{stats.points}</p>
+          <div
+            className={`flex items-center gap-2 ${hasShop ? 'cursor-pointer group' : ''}`}
+            onClick={hasShop ? openShop : undefined}
+            role={hasShop ? 'button' : undefined}
+            tabIndex={hasShop ? 0 : undefined}
+          >
+            <Coins className={`w-4 h-4 text-yellow-500 ${hasShop ? 'group-hover:text-yellow-400 transition-colors' : ''}`} />
+            <p className={`text-lg font-bold text-brand-500 ${hasShop ? 'group-hover:underline' : ''}`}>{stats.points}</p>
           </div>
         </div>
         <div className="space-y-1">
