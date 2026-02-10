@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { login as apiLogin, logout as apiLogout, checkAuth, getAuthToken, setAuthToken } from '@/lib/api';
+import { login as apiLogin, logout as apiLogout, checkAuth, getAuthToken, setAuthToken, IS_DEMO } from '@/lib/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -19,6 +19,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Vérifier l'authentification au chargement
   useEffect(() => {
     const verifyAuth = async () => {
+      if (IS_DEMO) {
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return;
+      }
       const token = getAuthToken();
       if (token) {
         const valid = await checkAuth();

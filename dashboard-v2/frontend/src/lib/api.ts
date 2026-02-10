@@ -4,6 +4,9 @@
  */
 import { AllStats } from "@/types/tracker";
 
+// Demo mode: mock data, no backend needed (for Vercel preview)
+export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO === 'true';
+
 // URL de l'API (configurable via env)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -102,6 +105,10 @@ export interface LoginResponse {
  * Authentification
  */
 export async function login(password: string, rememberMe: boolean = false): Promise<boolean> {
+  if (IS_DEMO) {
+    setAuthToken('demo-token');
+    return true;
+  }
   try {
     const data = await apiFetch<LoginResponse>('/auth/login', {
       method: 'POST',
@@ -136,6 +143,7 @@ export async function logout(): Promise<void> {
  * Vérifie la validité du token
  */
 export async function checkAuth(): Promise<boolean> {
+  if (IS_DEMO) return true;
   try {
     await apiFetch('/auth/me');
     return true;
@@ -150,6 +158,10 @@ export async function checkAuth(): Promise<boolean> {
  * Récupère les stats actuelles de tous les trackers
  */
 export async function fetchTorrentStats(): Promise<AllStats | null> {
+  if (IS_DEMO) {
+    const { DEMO_STATS } = await import('./demo-data');
+    return DEMO_STATS;
+  }
   try {
     return await apiFetch<AllStats>('/api/stats');
   } catch (error) {
@@ -162,6 +174,10 @@ export async function fetchTorrentStats(): Promise<AllStats | null> {
  * Récupère l'historique des stats
  */
 export async function fetchTorrentHistory(days: number = 30): Promise<AllStats[] | null> {
+  if (IS_DEMO) {
+    const { DEMO_HISTORY } = await import('./demo-data');
+    return DEMO_HISTORY;
+  }
   try {
     return await apiFetch<AllStats[]>(`/api/history?days=${days}`);
   } catch (error) {
@@ -203,6 +219,7 @@ export interface ScrapeResult {
  * Récupère le status des scrapers
  */
 export async function getScraperStatus(): Promise<ScraperStatus | null> {
+  if (IS_DEMO) return { scraping_in_progress: false, configured_scrapers: ['Tracker Alpha', 'Tracker Bravo', 'Tracker Charlie', 'Tracker Delta'] };
   try {
     return await apiFetch<ScraperStatus>('/scrapers/status');
   } catch (error) {
@@ -215,6 +232,7 @@ export async function getScraperStatus(): Promise<ScraperStatus | null> {
  * Lance le scraping de tous les trackers
  */
 export async function runAllScrapers(): Promise<ScrapeResult | null> {
+  if (IS_DEMO) return { status: 'demo', message: 'Demo mode - scraping disabled' };
   try {
     return await apiFetch<ScrapeResult>('/scrapers/run', { method: 'POST' });
   } catch (error) {

@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+  <rect width="800" height="450" rx="12" fill="#0c111d"/>
+  <!-- Navbar -->
+  <rect x="0" y="0" width="800" height="48" rx="0" fill="#111827"/>
+  <rect x="20" y="12" width="24" height="24" rx="6" fill="#1e3a5f"/>
+  <rect x="52" y="16" width="80" height="10" rx="4" fill="#465fff"/>
+  <rect x="52" y="30" width="50" height="6" rx="3" fill="#374151"/>
+  <rect x="280" y="10" width="240" height="28" rx="14" fill="#1f2937"/>
+  <rect x="286" y="14" width="70" height="20" rx="10" fill="transparent"/>
+  <rect x="362" y="14" width="70" height="20" rx="10" fill="transparent"/>
+  <rect x="438" y="14" width="70" height="20" rx="10" fill="#374151"/>
+  <!-- Title -->
+  <rect x="24" y="68" width="160" height="14" rx="4" fill="#e5e7eb"/>
+  <rect x="24" y="86" width="100" height="8" rx="3" fill="#374151"/>
+  <!-- KPI Row -->
+  <g>
+    <rect x="24" y="110" width="180" height="70" rx="12" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+    <rect x="44" y="128" width="32" height="32" rx="8" fill="#1e3a5f"/>
+    <circle cx="60" cy="144" r="8" fill="none" stroke="#3b82f6" stroke-width="2"/>
+    <rect x="88" y="126" width="30" height="8" rx="3" fill="#6b7280"/>
+    <rect x="88" y="140" width="50" height="14" rx="4" fill="#e5e7eb"/>
+    <rect x="88" y="158" width="40" height="8" rx="3" fill="#6b7280"/>
+  </g>
+  <g>
+    <rect x="214" y="110" width="180" height="70" rx="12" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+    <rect x="234" y="128" width="32" height="32" rx="8" fill="#2d1b4e"/>
+    <rect x="278" y="126" width="30" height="8" rx="3" fill="#6b7280"/>
+    <rect x="278" y="140" width="50" height="14" rx="4" fill="#e5e7eb"/>
+    <rect x="278" y="158" width="60" height="8" rx="3" fill="#6b7280"/>
+  </g>
+  <g>
+    <rect x="404" y="110" width="180" height="70" rx="12" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+    <rect x="424" y="128" width="32" height="32" rx="8" fill="#052e16"/>
+    <rect x="468" y="126" width="50" height="8" rx="3" fill="#6b7280"/>
+    <rect x="468" y="140" width="60" height="14" rx="4" fill="#e5e7eb"/>
+    <rect x="468" y="158" width="30" height="8" rx="3" fill="#6b7280"/>
+  </g>
+  <g>
+    <rect x="594" y="110" width="180" height="70" rx="12" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+    <rect x="614" y="128" width="32" height="32" rx="8" fill="#083344"/>
+    <rect x="658" y="126" width="40" height="8" rx="3" fill="#6b7280"/>
+    <rect x="658" y="140" width="50" height="14" rx="4" fill="#e5e7eb"/>
+    <rect x="658" y="158" width="30" height="8" rx="3" fill="#6b7280"/>
+  </g>
+  <!-- CPU Panel -->
+  <rect x="24" y="196" width="504" height="236" rx="12" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+  <rect x="44" y="212" width="80" height="12" rx="4" fill="#e5e7eb"/>
+  <rect x="44" y="228" width="140" height="8" rx="3" fill="#6b7280"/>
+  <rect x="468" y="212" width="40" height="16" rx="4" fill="#e5e7eb"/>
+  <!-- CPU chart area -->
+  <rect x="44" y="252" width="464" height="80" rx="8" fill="#111827"/>
+  <polyline points="54,320 94,310 134,300 174,315 214,290 254,305 294,280 334,295 374,275 414,290 454,270 494,285" fill="none" stroke="#3b82f6" stroke-width="2"/>
+  <!-- Core bars -->
+  <g>
+    <rect x="44" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="44" y="354" width="26" height="20" rx="3" fill="#3b82f6"/>
+    <rect x="76" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="76" y="350" width="26" height="24" rx="3" fill="#3b82f6"/>
+    <rect x="108" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="108" y="360" width="26" height="14" rx="3" fill="#3b82f6"/>
+    <rect x="140" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="140" y="346" width="26" height="28" rx="3" fill="#f97316"/>
+    <rect x="172" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="172" y="358" width="26" height="16" rx="3" fill="#3b82f6"/>
+    <rect x="204" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="204" y="352" width="26" height="22" rx="3" fill="#3b82f6"/>
+    <rect x="236" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="236" y="362" width="26" height="12" rx="3" fill="#3b82f6"/>
+    <rect x="268" y="344" width="26" height="30" rx="3" fill="#1f2937"/>
+    <rect x="268" y="356" width="26" height="18" rx="3" fill="#3b82f6"/>
+  </g>
+  <!-- Temp/Power/Fan -->
+  <rect x="44" y="390" width="146" height="30" rx="6" fill="#111827"/>
+  <rect x="200" y="390" width="146" height="30" rx="6" fill="#111827"/>
+  <rect x="356" y="390" width="146" height="30" rx="6" fill="#111827"/>
+  <!-- Right column: processes -->
+  <rect x="544" y="196" width="232" height="236" rx="12" fill="#1a1f2e" stroke="#374151" stroke-width="1"/>
+  <rect x="564" y="216" width="80" height="10" rx="4" fill="#e5e7eb"/>
+  <rect x="564" y="240" width="120" height="8" rx="3" fill="#6b7280"/>
+  <rect x="720" y="240" width="36" height="8" rx="3" fill="#ec4899"/>
+  <rect x="564" y="258" width="100" height="8" rx="3" fill="#6b7280"/>
+  <rect x="720" y="258" width="30" height="8" rx="3" fill="#ec4899"/>
+  <rect x="564" y="276" width="80" height="8" rx="3" fill="#6b7280"/>
+  <rect x="720" y="276" width="28" height="8" rx="3" fill="#ec4899"/>
+  <rect x="564" y="294" width="90" height="8" rx="3" fill="#6b7280"/>
+  <rect x="720" y="294" width="24" height="8" rx="3" fill="#ec4899"/>
+  <rect x="564" y="312" width="70" height="8" rx="3" fill="#6b7280"/>
+  <rect x="720" y="312" width="20" height="8" rx="3" fill="#ec4899"/>
+</svg>
