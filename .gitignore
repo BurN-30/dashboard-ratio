@@ -33,6 +33,9 @@ stats.json
 history.json
 hardware.json
 
+# Cookies (session data - never commit)
+cookies/
+
 # HTML Dumps (fichiers temporaires)
 *.html
 *_files/
