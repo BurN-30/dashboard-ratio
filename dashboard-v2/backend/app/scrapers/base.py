@@ -1,14 +1,19 @@
 """
 Classe de base abstraite pour tous les scrapers de trackers.
 """
+import json
 import logging
+import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
-from playwright.async_api import Page, Browser
+from playwright.async_api import Page, Browser, BrowserContext
 import re
 
 logger = logging.getLogger("dashboard.scraper")
+
+COOKIES_DIR = Path("/app/cookies") if os.path.isdir("/app") else Path("cookies")
 
 
 @dataclass
@@ -91,28 +96,82 @@ class BaseScraper(ABC):
         """
         pass
 
+    def _cookies_path(self) -> Path:
+        """Chemin du fichier cookies pour ce tracker."""
+        safe_name = re.sub(r'[^a-zA-Z0-9]', '_', self.name).lower()
+        return COOKIES_DIR / f"{safe_name}.json"
+
+    async def _save_cookies(self, context: BrowserContext) -> None:
+        """Sauvegarde les cookies du context pour reutilisation."""
+        try:
+            COOKIES_DIR.mkdir(parents=True, exist_ok=True)
+            state = await context.storage_state()
+            self._cookies_path().write_text(json.dumps(state))
+            logger.info("[%s] Cookies sauvegardes", self.name)
+        except Exception as e:
+            logger.warning("[%s] Impossible de sauvegarder les cookies: %s", self.name, e)
+
+    async def _try_with_cookies(self, browser: Browser) -> Optional[ScrapedStats]:
+        """Tente le scraping avec des cookies sauvegardes (skip login)."""
+        cookies_path = self._cookies_path()
+        if not cookies_path.exists():
+            return None
+
+        try:
+            state = json.loads(cookies_path.read_text())
+            context = await browser.new_context(storage_state=state)
+            page = await context.new_page()
+            page.set_default_timeout(60000)
+
+            try:
+                logger.info("[%s] Tentative avec cookies sauvegardes", self.name)
+                await page.goto(self.profile_url, timeout=90000)
+                await page.wait_for_load_state("networkidle", timeout=30000)
+
+                # Si on est redirige vers /login, les cookies sont expires
+                if "/login" in page.url:
+                    logger.info("[%s] Cookies expires, suppression", self.name)
+                    cookies_path.unlink(missing_ok=True)
+                    return None
+
+                stats = await self.scrape(page)
+                # Rafraichir les cookies apres usage reussi
+                await self._save_cookies(context)
+                logger.info("[%s] Scraping termine (via cookies)", self.name)
+                return stats
+            finally:
+                await context.close()
+
+        except Exception as e:
+            logger.warning("[%s] Erreur avec cookies: %s", self.name, e)
+            cookies_path.unlink(missing_ok=True)
+            return None
+
     async def run(self, browser: Browser) -> ScrapedStats:
         """
-        Execute le scraping complet (login + scrape).
-
-        Args:
-            browser: Instance Browser Playwright
-
-        Returns:
-            ScrapedStats ou None en cas d'erreur
+        Execute le scraping complet.
+        Tente d'abord avec des cookies sauvegardes, puis login classique.
         """
+        # Essayer avec les cookies sauvegardes
+        result = await self._try_with_cookies(browser)
+        if result is not None:
+            return result
+
+        # Login classique
         context = await browser.new_context()
         page = await context.new_page()
         page.set_default_timeout(60000)
 
         try:
-            # Login
             logger.info("[%s] Navigation vers %s", self.name, self.config.login_url)
             await page.goto(self.config.login_url, timeout=90000)
 
             if not await self.login(page):
                 logger.warning("[%s] Echec du login", self.name)
                 return ScrapedStats(tracker_name=self.name, raw_data={"error": "login_failed"})
+
+            # Sauvegarder les cookies apres login reussi
+            await self._save_cookies(context)
 
             # Navigation vers le profil
             logger.info("[%s] Navigation vers %s", self.name, self.profile_url)
