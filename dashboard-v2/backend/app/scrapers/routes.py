@@ -168,6 +168,11 @@ async def run_scraping_task(db: AsyncSession = None, tracker_name: Optional[str]
 async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats):
     """Sauvegarde les stats en base de donnees."""
     try:
+        # Ne pas sauvegarder les stats en erreur (login_failed, etc.)
+        if stats.raw_data and isinstance(stats.raw_data, dict) and "error" in stats.raw_data:
+            logger.warning("Skip sauvegarde %s: %s", stats.tracker_name, stats.raw_data["error"])
+            return
+
         # Convertir ratio en float si possible
         ratio_float = None
         if stats.ratio and stats.ratio != "0":
