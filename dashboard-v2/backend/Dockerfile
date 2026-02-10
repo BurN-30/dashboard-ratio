@@ -24,6 +24,9 @@ RUN mkdir -p /opt/playwright && \
     playwright install chromium --with-deps && \
     chmod -R 755 /opt/playwright
 
+# Creer le repertoire cookies avec les bonnes permissions
+RUN mkdir -p /app/cookies && chown appuser:appuser /app/cookies
+
 # Copier le code de l'application
 COPY --chown=appuser:appuser app/ ./app/
 
