@@ -63,6 +63,8 @@ services:
       - GEMINI_USER=${GEMINI_USER}
       - GEMINI_PASS=${GEMINI_PASS}
       - GEMINI_USERNAME=${GEMINI_USERNAME}
+    volumes:
+      - cookies-data:/app/cookies
     depends_on:
       db:
         condition: service_healthy
@@ -92,3 +94,4 @@ services:
 
 volumes:
   postgres-data:
+  cookies-data:
