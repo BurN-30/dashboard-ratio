@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { IS_DEMO } from '@/lib/api';
 
 // === INTERFACES ===
 export interface ProcessData {
@@ -118,6 +119,50 @@ function transformAgentData(data: any): HardwareStats {
   };
 }
 
+function generateDemoHwStats(): HardwareStats {
+  const rnd = (min: number, max: number) => min + Math.random() * (max - min);
+  return {
+    osName: 'Windows 11 Pro 24H2',
+    uptime: '3j 14h 22min',
+    cpuName: 'AMD Ryzen 7 5800X 8-Core',
+    cpuLoad: rnd(25, 75),
+    cpuTemp: rnd(42, 68),
+    cpuPower: rnd(35, 95),
+    cpuClockSpeed: rnd(3600, 4700),
+    cpuFanSpeed: rnd(800, 1400),
+    cpuCoreLoads: Array.from({ length: 16 }, () => rnd(5, 95)),
+    gpus: [{
+      name: 'NVIDIA GeForce RTX 3070',
+      load: rnd(10, 60),
+      temperature: rnd(38, 72),
+      memoryUsed: rnd(1200, 4800),
+      memoryTotal: 8192,
+      fanSpeed: rnd(30, 65),
+      power: rnd(40, 180),
+    }],
+    topProcesses: [
+      { name: 'chrome.exe', id: 1234, memoryUsedMb: rnd(800, 1600) },
+      { name: 'firefox.exe', id: 2345, memoryUsedMb: rnd(400, 900) },
+      { name: 'code.exe', id: 3456, memoryUsedMb: rnd(300, 700) },
+      { name: 'discord.exe', id: 4567, memoryUsedMb: rnd(200, 500) },
+      { name: 'steam.exe', id: 5678, memoryUsedMb: rnd(100, 350) },
+    ],
+    ramUsed: 21.3,
+    ramTotal: 32.0,
+    ramUsedPercent: 66.6,
+    drives: [
+      { name: 'Samsung 980 PRO', mount: 'C:', usedSpace: 287, totalSpace: 476, usedPercent: 60.3, temperature: null },
+      { name: 'WD Black SN850X', mount: 'D:', usedSpace: 1245, totalSpace: 1907, usedPercent: 65.3, temperature: null },
+    ],
+    diskTemps: [
+      { name: 'Samsung 980 PRO', temp: 41 },
+      { name: 'WD Black SN850X', temp: 38 },
+    ],
+    network: { uploadSpeed: rnd(5, 55), downloadSpeed: rnd(2, 120) },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const {
     interval = 2000,
@@ -133,7 +178,26 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
   const latestStatsRef = useRef<HardwareStats | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Demo mode: generate fake data on interval
   useEffect(() => {
+    if (!IS_DEMO) return;
+    setLoading(false);
+    const tick = () => {
+      const data = generateDemoHwStats();
+      setStats(data);
+      setHistory(prev => {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return [...prev, { time: timeStr, cpu: data.cpuLoad, ram: data.ramUsedPercent }].slice(-historyLength);
+      });
+    };
+    tick();
+    const id = setInterval(tick, interval);
+    return () => clearInterval(id);
+  }, [IS_DEMO, interval, historyLength]);
+
+  useEffect(() => {
+    if (IS_DEMO) return;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || window.location.host;
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
@@ -194,7 +258,7 @@ export function useHardwareStats(options: UseHardwareStatsOptions = {}) {
       };
     };
 
-    if (isPolling) {
+    if (isPolling && !IS_DEMO) {
       connect();
     }
 
