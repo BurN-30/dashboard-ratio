@@ -36,7 +36,7 @@ export default function Navbar() {
             <LayoutDashboard className="w-6 h-6 text-brand-500 dark:text-blue-500" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white tracking-wide">Nexus<span className="text-brand-500 dark:text-blue-500">Dash</span></h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white tracking-wide">Track<span className="text-brand-500 dark:text-blue-500">Board</span></h1>
             <div className="flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>

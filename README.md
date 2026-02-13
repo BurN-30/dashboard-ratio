@@ -1,105 +1,109 @@
-# Torrent Dashboard + Hardware Monitor
+# TrackBoard
 
-Personal dashboard to track private torrent tracker stats and monitor your hardware in real-time.
+Dashboard personnel pour suivre les stats de trackers torrent privés et monitorer son hardware en temps réel.
 
 <p align="center">
-  <img src="docs/screenshot-tracker-dark.svg" alt="Tracker Stats" width="700" />
+  <img src="docs/screenshot-tracker-dark.svg" alt="Statistiques Trackers" width="700" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshot-hardware-dark.svg" alt="Hardware Monitor" width="700" />
+  <img src="docs/screenshot-hardware-dark.svg" alt="Monitoring Hardware" width="700" />
 </p>
 
-> **Live Demo** — Deploy the frontend to Vercel with `NEXT_PUBLIC_DEMO=true` to get an interactive preview with mock data (no backend required).
+<p align="center">
+  <a href="https://trackboard-burn-30-nathan-saccols-projects.vercel.app"><strong>Voir la demo en ligne</strong></a>
+</p>
 
-## Features
+## Fonctionnalités
 
-**Tracker Stats**
-- Ratio, buffer, upload/download, bonus points for each tracker
-- History charts (ratio, buffer) over 30 days
-- Support for UNIT3D, Sharewood, and custom scrapers
-- Quick links to bonus shops
-- Automatic scraping at fixed times (configurable)
+**Statistiques Trackers**
+- Ratio, buffer, upload/download, bonus points par tracker
+- Graphiques d'historique (ratio, buffer) sur 30 jours
+- Support UNIT3D, Sharewood et scrapers custom
+- Liens rapides vers les boutiques bonus
+- Scraping automatique à intervalles configurables
 
-**Hardware Monitor**
-- CPU: load, temperature, power, frequency, fan speed, per-core load
-- GPU: load, temperature, VRAM, power, fan speed
-- RAM: real-time usage
-- Storage: disk space, HDD/NVMe temperatures
-- Network: upload/download in real-time
-- System uptime
+**Monitoring Hardware**
+- CPU : charge, température, puissance, fréquence, ventilateur, charge par coeur
+- GPU : charge, température, VRAM, puissance, ventilateur
+- RAM : utilisation en temps réel
+- Stockage : espace disque, températures HDD/NVMe
+- Réseau : upload/download en temps réel
+- Uptime système
 
 ## Architecture
 
 ```
-[Local PC]                      [VPS]
+[PC Local]                       [VPS]
 hw-agent ──WebSocket──> Nginx ──> Backend (FastAPI)
-                                     ├── PostgreSQL
-                                     ├── Scrapers (Playwright)
-                                     └── REST API + WebSocket
-                                  Nginx ──> Frontend (Next.js)
+                                      ├── PostgreSQL
+                                      ├── Scrapers (Playwright)
+                                      └── REST API + WebSocket
+                                   Nginx ──> Frontend (Next.js)
 ```
 
-- **Backend**: FastAPI, async SQLAlchemy, JWT auth, WebSocket
-- **Frontend**: Next.js with TailAdmin, ApexCharts, dark/light mode
-- **Scrapers**: Playwright headless (Chromium), UNIT3D + Sharewood
-- **HW Agent**: Python script (psutil, nvidia-smi, LibreHardwareMonitor WMI)
-- **Infra**: Docker Compose, Nginx reverse proxy, Let's Encrypt SSL
+| Composant | Stack |
+|-----------|-------|
+| **Backend** | FastAPI, async SQLAlchemy, JWT, WebSocket |
+| **Frontend** | Next.js, Tailwind CSS, ApexCharts, dark/light mode |
+| **Scrapers** | Playwright headless (Chromium), UNIT3D + Sharewood |
+| **HW Agent** | Python (psutil, nvidia-smi, LibreHardwareMonitor WMI) |
+| **Infra** | Docker Compose, Nginx reverse proxy, Let's Encrypt SSL |
 
-## Prerequisites
+## Prérequis
 
-- **Server/VPS** with Docker and Docker Compose
-- **Nginx** as reverse proxy (with SSL via Let's Encrypt)
-- **Python 3.10+** on local PC (for hw-agent)
-- **LibreHardwareMonitor** running on PC (for CPU/disk temperatures)
-- Accounts on the private trackers you want to monitor
+- **Serveur/VPS** avec Docker et Docker Compose
+- **Nginx** en reverse proxy (SSL via Let's Encrypt)
+- **Python 3.10+** sur le PC local (pour hw-agent)
+- **LibreHardwareMonitor** actif sur le PC (pour les températures CPU/disques)
+- Comptes sur les trackers privés à monitorer
 
-## Quick Start
+## Installation
 
-### 1. Clone
+### 1. Cloner
 
 ```bash
 git clone https://github.com/BurN-30/dashboard-ratio.git
 cd dashboard-ratio/dashboard-v2
 ```
 
-### 2. Configure
+### 2. Configurer
 
 ```bash
 cp .env.example .env
-# Edit .env with your credentials
+# Editer .env avec vos identifiants
 ```
 
-Key variables:
+Variables principales :
 
 | Variable | Description |
 |----------|-------------|
-| `DATABASE_URL` | PostgreSQL URL |
-| `JWT_SECRET` | JWT secret key (generate with `openssl rand -hex 32`) |
-| `ADMIN_PASSWORD` | Dashboard admin password |
-| `DOMAIN` | Your domain (e.g. `dashboard.example.com`) |
-| `HW_AGENT_TOKEN` | Hardware agent token (generate with `openssl rand -hex 16`) |
-| `TRACKER_USERNAME` | Your tracker username (for shop links) |
-| `SW_USER/PASS` | Sharewood credentials |
-| `GF_USER/PASS` | Generation-Free credentials |
-| `TOS_USER/PASS` | TheOldSchool credentials |
+| `DATABASE_URL` | URL PostgreSQL |
+| `JWT_SECRET` | Clé secrète JWT (`openssl rand -hex 32`) |
+| `ADMIN_PASSWORD` | Mot de passe admin du dashboard |
+| `DOMAIN` | Votre domaine (ex: `dashboard.example.com`) |
+| `HW_AGENT_TOKEN` | Token de l'agent hardware (`openssl rand -hex 16`) |
+| `TRACKER_USERNAME` | Pseudo tracker (pour les liens boutique) |
+| `SW_USER/PASS` | Identifiants Sharewood |
+| `GF_USER/PASS` | Identifiants Generation-Free |
+| `TOS_USER/PASS` | Identifiants TheOldSchool |
 
-### 3. Deploy with Docker
+### 3. Déployer avec Docker
 
 ```bash
 docker compose -f docker-compose.simple.yml up -d
 ```
 
-Containers expose ports on `127.0.0.1` only. Configure Nginx to proxy:
-- `dash.yourdomain.com` -> `localhost:3000` (frontend)
-- `api.yourdomain.com` -> `localhost:8000` (backend)
+Les conteneurs exposent les ports sur `127.0.0.1` uniquement. Configurer Nginx pour proxifier :
+- `dash.votredomaine.com` -> `localhost:3000` (frontend)
+- `api.votredomaine.com` -> `localhost:8000` (backend)
 
-### 4. Launch Hardware Agent (local PC)
+### 4. Lancer l'agent hardware (PC local)
 
 ```bash
 cd hw-agent
 cp .env.example .env
-# Edit .env with WS_URL and HW_AGENT_TOKEN
+# Editer .env avec WS_URL et HW_AGENT_TOKEN
 
 python -m venv venv
 venv\Scripts\activate  # Windows
@@ -107,59 +111,59 @@ pip install -r requirements.txt
 python agent.py
 ```
 
-The agent connects via WebSocket and sends hardware stats every 2 seconds.
+L'agent se connecte en WebSocket et envoie les stats hardware toutes les 2 secondes.
 
-## Demo / Preview Mode
+## Mode Démo
 
-The frontend supports a **demo mode** for previewing the UI without a backend:
+Le frontend intègre un **mode démo** pour prévisualiser l'interface sans backend :
 
 ```bash
 cd dashboard-v2/frontend
 NEXT_PUBLIC_DEMO=true npm run dev
 ```
 
-Or deploy to Vercel with the environment variable `NEXT_PUBLIC_DEMO=true` for a public preview.
+Une version démo est déployée automatiquement sur Vercel à chaque push : [**trackboard.vercel.app**](https://trackboard-burn-30-nathan-saccols-projects.vercel.app)
 
-## Project Structure
+## Structure du projet
 
 ```
 dashboard-v2/
-├── backend/                # FastAPI API
+├── backend/                # API FastAPI
 │   ├── app/
-│   │   ├── main.py         # Entry point, CORS, startup
+│   │   ├── main.py         # Point d'entrée, CORS, startup
 │   │   ├── config.py       # Configuration (Pydantic Settings)
 │   │   ├── database.py     # Async SQLAlchemy
-│   │   ├── models.py       # DB models
-│   │   ├── auth/           # JWT auth + rate limiting
-│   │   ├── api/            # REST routes (tracker stats)
-│   │   ├── hardware/       # WebSocket hardware monitoring
-│   │   └── scrapers/       # Playwright scrapers + scheduler
+│   │   ├── models.py       # Modèles BDD
+│   │   ├── auth/           # Auth JWT + rate limiting
+│   │   ├── api/            # Routes REST (stats trackers)
+│   │   ├── hardware/       # WebSocket monitoring hardware
+│   │   └── scrapers/       # Scrapers Playwright + scheduler
 │   ├── Dockerfile
 │   └── requirements.txt
-├── frontend/               # Next.js dashboard
+├── frontend/               # Dashboard Next.js
 │   ├── src/
 │   │   ├── app/            # Pages (/, /traffic, /hardware-monitor)
-│   │   ├── components/     # UI components
-│   │   ├── hooks/          # Custom hooks (useHardwareStats, etc.)
-│   │   └── lib/            # API client, demo data, auth utils
+│   │   ├── components/     # Composants UI
+│   │   ├── hooks/          # Hooks custom (useHardwareStats, etc.)
+│   │   └── lib/            # Client API, données démo, auth
 │   └── Dockerfile
-├── hw-agent/               # Hardware monitoring agent
-│   ├── agent.py            # Collects stats + sends via WebSocket
+├── hw-agent/               # Agent monitoring hardware
+│   ├── agent.py            # Collecte stats + envoi WebSocket
 │   └── requirements.txt
 ├── docker-compose.simple.yml  # Production (Nginx proxy)
-├── docker-compose.dev.yml     # Local development
-└── .env.example               # Configuration template
+├── docker-compose.dev.yml     # Développement local
+└── .env.example               # Template de configuration
 ```
 
-## Security
+## Sécurité
 
-- JWT auth on all API routes and WebSocket endpoints
-- Rate limiting on `/auth/login` (5 attempts/min/IP)
-- CORS configured per domain (no wildcard)
-- Docker ports exposed on `127.0.0.1` only
-- Hardware agent authenticated by token
-- No secrets in source code (everything via `.env`)
+- Auth JWT sur toutes les routes API et WebSocket
+- Rate limiting sur `/auth/login` (5 tentatives/min/IP)
+- CORS configuré par domaine (pas de wildcard)
+- Ports Docker exposés sur `127.0.0.1` uniquement
+- Agent hardware authentifié par token
+- Aucun secret dans le code source (tout via `.env`)
 
-## License
+## Licence
 
 MIT

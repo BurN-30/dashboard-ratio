@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'standalone', // Optimized for Docker deployment
+  output: process.env.VERCEL ? undefined : 'standalone',
   images: {
     unoptimized: true, // Images handled client-side
   },
