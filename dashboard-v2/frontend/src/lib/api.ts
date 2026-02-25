@@ -3,6 +3,7 @@
  * Se connecte directement au backend FastAPI
  */
 import { AllStats } from "@/types/tracker";
+import { MediaOverview } from "@/types/media";
 
 // Demo mode: mock data, no backend needed (for Vercel preview)
 export const IS_DEMO = process.env.NEXT_PUBLIC_DEMO === 'true';
@@ -249,6 +250,20 @@ export async function runScraper(trackerName: string): Promise<ScrapeResult | nu
     return await apiFetch<ScrapeResult>(`/scrapers/run/${trackerName}`, { method: 'POST' });
   } catch (error) {
     console.error(`Error running scraper ${trackerName}:`, error);
+    return null;
+  }
+}
+
+// ==================== MEDIA ====================
+
+/**
+ * Recupere l'apercu de tous les services media
+ */
+export async function fetchMediaOverview(): Promise<MediaOverview | null> {
+  try {
+    return await apiFetch<MediaOverview>('/media/overview');
+  } catch (error) {
+    console.error('Error fetching media overview:', error);
     return null;
   }
 }
