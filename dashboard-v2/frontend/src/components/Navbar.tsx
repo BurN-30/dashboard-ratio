@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Cpu, Database, BarChart2, Sun, Moon, LogOut } from 'lucide-react';
+import { LayoutDashboard, Cpu, Database, BarChart2, Film, Sun, Moon, LogOut } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { logout } from '@/lib/api';
@@ -18,6 +18,7 @@ export default function Navbar() {
     { name: 'Torrents', href: '/', icon: Database },
     { name: 'Details', href: '/traffic', icon: BarChart2 },
     { name: 'Hardware', href: '/hardware-monitor', icon: Cpu },
+    { name: 'Media', href: '/media', icon: Film },
   ];
 
   const handleLogout = async () => {
