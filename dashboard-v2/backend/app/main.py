@@ -19,6 +19,7 @@ from app.scrapers.routes import router as scraper_router  # noqa: E402
 from app.scrapers.scheduler import start_scheduler, stop_scheduler  # noqa: E402
 from app.hardware.routes import router as hardware_router  # noqa: E402
 from app.api.routes import router as api_router  # noqa: E402
+from app.media.routes import router as media_router  # noqa: E402
 
 logger = logging.getLogger("dashboard")
 
@@ -81,6 +82,7 @@ app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(scraper_router, prefix="/scrapers", tags=["Scrapers"])
 app.include_router(hardware_router, prefix="/hardware", tags=["Hardware"])
 app.include_router(api_router, prefix="/api", tags=["API"])
+app.include_router(media_router, prefix="/media", tags=["Media"])
 
 
 @app.get("/")
