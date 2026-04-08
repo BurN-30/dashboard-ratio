@@ -176,6 +176,25 @@ Write-Host "[INFO] Installation du service cloudflared..." -ForegroundColor Cyan
 & $CloudflaredExe service install 2>&1 | Out-String | Write-Host -ForegroundColor DarkGray
 Start-Sleep -Seconds 3
 
+# --- 8b. Forcer 'tunnel run' dans le binPath du service ---
+# Bug observe sur cloudflared 2025.8.1 (Windows) : 'service install' enregistre
+# le binPath sans l'argument 'tunnel run'. Quand le SCM lance le service,
+# cloudflared.exe sans argument affiche son aide
+# ("Use cloudflared tunnel run to start a tunnel...") et exit immediatement,
+# le service passe en Stopped, et la colonne CONNECTIONS de "tunnel list"
+# reste vide. Symptome : tous les hostnames du tunnel renvoient HTTP 530
+# alors que le service tourne (techniquement il a crashe juste apres le
+# demarrage et SCM ne le redemarre pas).
+# Fix : on force le binPath via sc.exe pour inclure 'tunnel run'.
+Write-Host "[INFO] Patch du binPath du service (ajout de 'tunnel run')..." -ForegroundColor Cyan
+$svcStillExists = Get-Service -Name cloudflared -ErrorAction SilentlyContinue
+if ($svcStillExists) {
+    sc.exe --% config cloudflared binPath= "\"C:\Program Files (x86)\cloudflared\cloudflared.exe\" tunnel run" | Out-Null
+    Write-Host "[OK] binPath patche" -ForegroundColor Green
+} else {
+    Write-Host "[WARN] Service absent, skip du patch binPath" -ForegroundColor Yellow
+}
+
 # --- 9. Demarrer le service ---
 $svc = Get-Service -Name cloudflared -ErrorAction SilentlyContinue
 if (-not $svc) {
