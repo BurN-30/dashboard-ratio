@@ -1,11 +1,17 @@
-# docker-compose.simple.yml
-# Deployment simplifie pour utilisation avec Nginx reverse proxy externe.
-# Les ports sont exposes sur localhost, Nginx se charge du SSL et du routage.
+# docker-compose.yml
+# Stack TrackBoard : DB + backend FastAPI + frontend Next.js.
+# Le reverse proxy HTTPS est gere PAR LE HOST (nginx ou Caddy installe sur la machine,
+# pas dans le compose). Les containers exposent leurs ports sur 127.0.0.1 uniquement,
+# le reverse proxy host les proxifie ensuite vers les sous-domaines publics.
 #
-# Usage:
-#   docker compose -f docker-compose.simple.yml up -d
-#   docker compose -f docker-compose.simple.yml logs -f
-#   docker compose -f docker-compose.simple.yml build --no-cache frontend
+# Routing typique cote nginx/caddy host :
+#   https://dash.${DOMAIN}/  -> 127.0.0.1:3000  (frontend Next.js)
+#   https://api.${DOMAIN}/   -> 127.0.0.1:8000  (backend FastAPI + WebSocket)
+#
+# Usage :
+#   docker compose up -d
+#   docker compose logs -f
+#   docker compose build --no-cache frontend
 
 services:
   # ===========================================
@@ -13,16 +19,16 @@ services:
   # ===========================================
   db:
     image: postgres:16-alpine
-    container_name: dashboard-db
+    container_name: trackboard-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-dashboard}
+      POSTGRES_USER: ${POSTGRES_USER:-trackboard}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-dashboard}
+      POSTGRES_DB: ${POSTGRES_DB:-trackboard}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dashboard}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trackboard}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,7 +40,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: dashboard-backend
+    container_name: trackboard-backend
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
@@ -92,9 +98,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
+        # URL du backend appelee depuis le navigateur (figee au build de Next).
+        # Pour le multi-origin standard : https://api.${DOMAIN}
+        # Pour same-origin (un seul vhost qui route /api -> backend) : laisser vide.
         - NEXT_PUBLIC_API_URL=https://api.${DOMAIN:-example.com}
         - NEXT_PUBLIC_TRACKER_USERNAME=${TRACKER_USERNAME:-}
-    container_name: dashboard-frontend
+    container_name: trackboard-frontend
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

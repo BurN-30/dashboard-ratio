@@ -20,6 +20,7 @@ from app.scrapers.scheduler import start_scheduler, stop_scheduler  # noqa: E402
 from app.hardware.routes import router as hardware_router  # noqa: E402
 from app.api.routes import router as api_router  # noqa: E402
 from app.media.routes import router as media_router  # noqa: E402
+from app.health import router as health_router, VERSION  # noqa: E402
 
 logger = logging.getLogger("dashboard")
 
@@ -45,9 +46,9 @@ async def lifespan(app: FastAPI):
 
 # Creation de l'application FastAPI
 app = FastAPI(
-    title="Dashboard V2 API",
-    description="API unifiee pour le monitoring torrent et hardware",
-    version="2.0.0",
+    title="TrackBoard API",
+    description="API unifiee pour le monitoring trackers torrent + hardware + media",
+    version=VERSION,
     lifespan=lifespan,
 )
 
@@ -78,6 +79,7 @@ app.add_middleware(
 )
 
 # Enregistrement des routers
+app.include_router(health_router, tags=["Health"])
 app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 app.include_router(scraper_router, prefix="/scrapers", tags=["Scrapers"])
 app.include_router(hardware_router, prefix="/hardware", tags=["Hardware"])
@@ -87,20 +89,10 @@ app.include_router(media_router, prefix="/media", tags=["Media"])
 
 @app.get("/")
 async def root():
-    """Route racine - health check basique."""
+    """Route racine - identification du service."""
     return {
-        "status": "online",
-        "service": "Dashboard V2 API",
-        "version": "2.0.0"
-    }
-
-
-@app.get("/health")
-async def health_check():
-    """Health check detaille pour monitoring."""
-    return {
-        "status": "healthy",
-        "database": "connected",
-        "scrapers": "ready",
-        "hardware_ws": "ready"
+        "service": "TrackBoard API",
+        "version": VERSION,
+        "docs": "/docs",
+        "health": "/health",
     }
