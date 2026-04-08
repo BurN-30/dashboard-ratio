@@ -1,8 +1,12 @@
 """
-Scraper specifique pour Torr9.xyz
-Torr9 est un site Next.js custom (PAS UNIT3D).
-Les stats sont sur /stats, les tokens sur /tokens.
-Pas de structure dt/dd — tout est en texte dans des divs.
+Scraper specifique pour Torr9.
+
+Notes :
+- Le tracker a migre de torr9.xyz vers torr9.net en avril 2026.
+- Site Next.js custom (PAS UNIT3D), parsing texte sans dt/dd.
+- /stats peut etre temporairement en maintenance : on degrade gracieusement
+  en mettant les champs concernes a "0", mais on continue a essayer /tokens
+  pour le solde de points bonus.
 """
 import logging
 import re
@@ -12,14 +16,17 @@ from app.scrapers.base import BaseScraper, ScraperConfig, ScrapedStats
 
 logger = logging.getLogger("dashboard.scraper")
 
+BASE_URL = "https://torr9.net"
+STATS_URL = f"{BASE_URL}/stats"
+TOKENS_URL = f"{BASE_URL}/tokens"
+
 
 class Torr9Scraper(BaseScraper):
-    """Scraper pour Torr9.xyz (Next.js custom)."""
+    """Scraper pour Torr9 (Next.js custom)."""
 
     async def login(self, page: Page) -> bool:
         """Login sur Torr9 (Next.js SPA)."""
         try:
-            # Attendre que la page charge
             try:
                 await page.wait_for_load_state('networkidle', timeout=15000)
             except:
@@ -29,7 +36,6 @@ class Torr9Scraper(BaseScraper):
                 logger.warning("[%s] Identifiants manquants", self.name)
                 return False
 
-            # Chercher le formulaire de login
             username_input = page.locator('input[name="username"]')
             password_input = page.locator('input[name="password"]')
 
@@ -37,33 +43,25 @@ class Torr9Scraper(BaseScraper):
                 logger.info("[%s] Pas de formulaire, deja connecte", self.name)
                 return True
 
-            # Remplir le formulaire
             await page.fill('input[name="username"]', self.config.username)
             await page.fill('input[name="password"]', self.config.password)
 
-            # Soumettre
             submit = page.locator('button[type="submit"]')
             if await submit.count() > 0:
                 await submit.first.click()
             else:
                 await password_input.press('Enter')
 
-            # Attendre la reponse du serveur
             await page.wait_for_timeout(3000)
             try:
                 await page.wait_for_load_state('networkidle', timeout=5000)
             except:
                 pass
 
-            # Verifier en naviguant vers /stats
-            await page.goto("https://torr9.xyz/stats", timeout=30000)
-            try:
-                await page.wait_for_load_state('networkidle', timeout=10000)
-            except:
-                pass
-
+            # Verifier qu'on n'est plus sur /login (signal de login OK).
+            # On evite de naviguer vers /stats explicitement car il peut etre en maintenance.
             if '/login' in page.url:
-                logger.warning("[%s] Login echoue (credentials invalides ou site bloque)", self.name)
+                logger.warning("[%s] Login echoue (toujours sur /login)", self.name)
                 return False
 
             logger.info("[%s] Login reussi", self.name)
@@ -74,39 +72,23 @@ class Torr9Scraper(BaseScraper):
             return False
 
     async def scrape(self, page: Page) -> ScrapedStats:
-        """Scrape les stats Torr9 depuis /stats et /tokens."""
-        return await self._scrape_stats(page)
+        """Methode appelee par BaseScraper.run() (cookies path). Voir aussi run() override."""
+        return await self._gather(page)
 
     async def run(self, browser: Browser) -> ScrapedStats:
-        """Override run() car Torr9 n'a pas de page profil standard."""
+        """Override : Torr9 n'a pas de page profil standard, on enchaine login + stats + tokens."""
         context = await browser.new_context()
         page = await context.new_page()
         page.set_default_timeout(60000)
 
         try:
-            # Login (navigue aussi vers /stats si login reussi)
             logger.info("[%s] Navigation vers %s", self.name, self.config.login_url)
             await page.goto(self.config.login_url, timeout=90000)
 
             if not await self.login(page):
                 return ScrapedStats(tracker_name=self.name, raw_data={"error": "login_failed"})
 
-            # On est deja sur /stats apres login()
-            stats = await self._scrape_stats(page)
-
-            # Scrape /tokens pour le solde
-            logger.info("[%s] Navigation vers /tokens", self.name)
-            await page.goto("https://torr9.xyz/tokens", timeout=60000)
-            try:
-                await page.wait_for_load_state('networkidle', timeout=15000)
-            except:
-                pass
-
-            tokens = await self._scrape_tokens(page)
-            stats.points_bonus = tokens
-
-            logger.info("[%s] Scraping termine", self.name)
-            return stats
+            return await self._gather(page)
 
         except Exception as e:
             logger.error("[%s] Erreur: %s", self.name, e)
@@ -114,6 +96,82 @@ class Torr9Scraper(BaseScraper):
 
         finally:
             await context.close()
+
+    async def _gather(self, page: Page) -> ScrapedStats:
+        """
+        Recupere stats + tokens, avec degradation gracieuse si l'un des deux echoue.
+        On veut au minimum les points bonus si /stats est en maintenance.
+        """
+        stats: ScrapedStats = ScrapedStats(tracker_name=self.name, raw_data={})
+        stats_ok = False
+        tokens_value = "0"
+
+        # 1. /stats (peut etre en maintenance, on ne plante pas)
+        try:
+            logger.info("[%s] Navigation vers %s", self.name, STATS_URL)
+            await page.goto(STATS_URL, timeout=60000)
+            try:
+                await page.wait_for_load_state('networkidle', timeout=10000)
+            except:
+                pass
+
+            if await self._is_maintenance(page):
+                logger.warning("[%s] /stats en maintenance, skip", self.name)
+                stats.raw_data["stats_status"] = "maintenance"
+            else:
+                parsed = await self._scrape_stats(page)
+                # Conserver le tracker_name et raw_data accumule
+                parsed.tracker_name = self.name
+                if parsed.raw_data is None:
+                    parsed.raw_data = {}
+                parsed.raw_data.update(stats.raw_data)
+                stats = parsed
+                stats_ok = True
+        except Exception as e:
+            logger.warning("[%s] Erreur scrape /stats : %s", self.name, e)
+            stats.raw_data["stats_status"] = "error"
+            stats.raw_data["stats_error"] = str(e)[:200]
+
+        # 2. /tokens (independant, on essaye toujours)
+        try:
+            logger.info("[%s] Navigation vers %s", self.name, TOKENS_URL)
+            await page.goto(TOKENS_URL, timeout=60000)
+            try:
+                await page.wait_for_load_state('networkidle', timeout=15000)
+            except:
+                pass
+
+            if await self._is_maintenance(page):
+                logger.warning("[%s] /tokens en maintenance, skip", self.name)
+            else:
+                tokens_value = await self._scrape_tokens(page)
+                stats.points_bonus = tokens_value
+        except Exception as e:
+            logger.warning("[%s] Erreur scrape /tokens : %s", self.name, e)
+
+        # Si on n'a rien obtenu du tout, on renvoie un error pour ne pas polluer la DB
+        if not stats_ok and tokens_value == "0":
+            logger.warning("[%s] Ni stats ni tokens disponibles, abandon", self.name)
+            return ScrapedStats(
+                tracker_name=self.name,
+                raw_data={"error": "all_endpoints_unavailable"}
+            )
+
+        logger.info(
+            "[%s] Scraping termine (stats_ok=%s, points_bonus=%s)",
+            self.name, stats_ok, stats.points_bonus or "0"
+        )
+        return stats
+
+    async def _is_maintenance(self, page: Page) -> bool:
+        """Heuristique pour detecter une page de maintenance Torr9."""
+        try:
+            body = await page.locator('body').inner_text(timeout=5000)
+            text = body.lower()
+            keywords = ["maintenance", "indisponible", "temporairement", "503"]
+            return any(k in text for k in keywords) and len(text) < 500
+        except:
+            return False
 
     async def _scrape_stats(self, page: Page) -> ScrapedStats:
         """Parse la page /stats de Torr9."""

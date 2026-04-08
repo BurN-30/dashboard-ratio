@@ -1,5 +1,7 @@
-# Version pour le developpement local (sans Traefik, sans HTTPS)
-version: "3.8"
+# docker-compose.dev.yml
+# Stack DEV LOCALE : DB + backend avec hot reload, sans Caddy, sans HTTPS.
+# Le frontend Next.js est lance separement avec `npm run dev` (port 3000).
+# Le backend ecoute en clair sur localhost:8000.
 
 services:
   # ===========================================
@@ -7,17 +9,17 @@ services:
   # ===========================================
   db:
     image: postgres:16-alpine
-    container_name: dashboard-db-dev
+    container_name: trackboard-db-dev
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: dashboard
+      POSTGRES_USER: trackboard
       POSTGRES_PASSWORD: devpassword
-      POSTGRES_DB: dashboard
+      POSTGRES_DB: trackboard
     volumes:
       - postgres-data-dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dashboard"]
+      test: ["CMD-SHELL", "pg_isready -U trackboard"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,12 +31,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
-    container_name: dashboard-backend-dev
+    container_name: trackboard-backend-dev
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://dashboard:devpassword@db:5432/dashboard
-      - JWT_SECRET=dev-secret-key-not-for-production
+      - DATABASE_URL=postgresql://trackboard:devpassword@db:5432/trackboard
+      - JWT_SECRET=dev-secret-key-min-32-chars-not-for-production
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRE_HOURS=24
       - ADMIN_PASSWORD=admin
@@ -48,3 +50,4 @@ services:
 
 volumes:
   postgres-data-dev:
+

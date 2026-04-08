@@ -14,7 +14,10 @@ logger = logging.getLogger("dashboard.scraper")
 settings = get_settings()
 
 
-# Configuration des sites supportes
+# Configuration des sites supportes.
+# `disabled: True` -> le scraper est ignore (utile pour un tracker en maintenance ou
+# dont le domaine a change). Le frontend continue d'afficher l'historique en DB,
+# seuls les scrapes auto sont skippes.
 SITES_CONFIG: List[dict] = [
     {
         "name": "GF-FREE",
@@ -38,10 +41,14 @@ SITES_CONFIG: List[dict] = [
         "env_prefix": "sw",
     },
     {
+        # Torr9 a migre de torr9.xyz -> torr9.net en avril 2026.
+        # La page /stats est en maintenance cote tracker, mais /tokens (points bonus)
+        # reste accessible. Le scraper degrade gracieusement : si /stats echoue,
+        # on continue avec /tokens uniquement (cf Torr9Scraper._gather).
         "name": "Torr9",
         "scraper_class": Torr9Scraper,
-        "login_url": "https://torr9.xyz/login",
-        "profile_url_template": "https://torr9.xyz/stats",  # Pas de profil standard
+        "login_url": "https://torr9.net/login",
+        "profile_url_template": "https://torr9.net/stats",
         "env_prefix": "torr9",
     },
     {
@@ -80,6 +87,11 @@ def build_scrapers() -> Dict[str, BaseScraper]:
     scrapers = {}
 
     for site in SITES_CONFIG:
+        # Skip si le site est explicitement desactive
+        if site.get("disabled"):
+            logger.info("%s: desactive (disabled=True), skip", site['name'])
+            continue
+
         user, password, profile_username = get_credentials_from_env(site["env_prefix"])
 
         # Skip si pas d'identifiants
@@ -132,12 +144,13 @@ def list_available_scrapers() -> List[str]:
 
 
 def list_all_sites() -> List[dict]:
-    """Liste tous les sites supportes (meme sans identifiants)."""
+    """Liste tous les sites supportes (meme sans identifiants ni desactives)."""
     return [
         {
             "name": site["name"],
             "login_url": site["login_url"],
             "configured": get_scraper(site["name"]) is not None,
+            "disabled": site.get("disabled", False),
         }
         for site in SITES_CONFIG
     ]
