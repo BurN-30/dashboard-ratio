@@ -5,15 +5,12 @@
 SSHOVH.txt
 contexte.md
 fiche-memo.md
-dashboard-v2/backend/.env
-dashboard-v2/hw-agent/.env
-dashboard-v2/frontend/.env.local
+backend/.env
+hw-agent/.env
+frontend/.env.local
 
 # Claude Code
 .claude/
-
-# Windows artifacts
-nul
 
 # Logs
 *.log
@@ -28,36 +25,14 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# Data
-stats.json
-history.json
-hardware.json
-
 # Cookies (session data - never commit)
 cookies/
 
-# HTML Dumps (fichiers temporaires)
+# HTML dumps (fichiers temporaires)
 *.html
 *_files/
 
-# Node / Next.js (si jamais vous commitez le dossier dashboard ici)
+# Node / Next.js
 node_modules/
 .next/
 .DS_Store
-
-# .NET / C# (hwMonitor)
-bin/
-obj/
-.vs/
-*.user
-*.suo
-*.pdb
-*.cache
-*.dll
-# Bloquer les exécutables et installateurs
-*.exe
-*.msi
-
-# Fichiers de configuration locaux .NET
-appsettings.Development.json
-hardware.json
