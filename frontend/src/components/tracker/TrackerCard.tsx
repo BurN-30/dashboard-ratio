@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock } from 'lucide-react';
-import { TrackerData, Unit3DStats, SharewoodStats } from '@/types/tracker';
+import { TrackerData } from '@/types/tracker';
 import DashboardCard from '@/components/common/DashboardCard';
 
 interface TrackerCardProps {
@@ -15,11 +15,10 @@ const TRACKER_USER = process.env.NEXT_PUBLIC_TRACKER_USERNAME || '';
 // Fragments d'URL construits dynamiquement (pas de lien complet en dur)
 const SP = (h: string, p: string): [string, string] => [h, p];
 const buildShopMap = (user: string): Record<string, [string, string]> => ({
-  'Sharewood': SP('www.sharewood.tv', `/bonus/${user}`),
-  'Torr9': SP('torr9.xyz', '/tokens'),
+  'Torr9': SP('torr9.net', '/tokens'),
   'TOS': SP('theoldschool.cc', `/users/${user}/transactions/create`),
-  'GF-FREE': SP('generation-free.org', `/users/${user}/transactions/create`),
   'G3MINI TR4CK3R': SP('gemini-tracker.org', `/users/${user}/transactions/create`),
+  'GF-FREE': SP('generation-free.org', `/users/${user}/transactions/create`),
 });
 const SHOP_MAP = TRACKER_USER ? buildShopMap(TRACKER_USER) : {};
 

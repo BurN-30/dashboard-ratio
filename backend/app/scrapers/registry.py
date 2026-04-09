@@ -6,7 +6,6 @@ import logging
 from typing import Dict, List, Optional, Type
 from app.scrapers.base import BaseScraper, ScraperConfig
 from app.scrapers.unit3d import Unit3DScraper
-from app.scrapers.sharewood import SharewoodScraper
 from app.scrapers.torr9 import Torr9Scraper
 from app.config import get_settings
 
@@ -20,27 +19,6 @@ settings = get_settings()
 # seuls les scrapes auto sont skippes.
 SITES_CONFIG: List[dict] = [
     {
-        "name": "GF-FREE",
-        "scraper_class": Unit3DScraper,
-        "login_url": "https://generation-free.org/login",
-        "profile_url_template": "https://generation-free.org/users/{username}",
-        "env_prefix": "gf",
-    },
-    {
-        "name": "TOS",
-        "scraper_class": Unit3DScraper,
-        "login_url": "https://theoldschool.cc/login",
-        "profile_url_template": "https://theoldschool.cc/users/{username}",
-        "env_prefix": "tos",
-    },
-    {
-        "name": "Sharewood",
-        "scraper_class": SharewoodScraper,
-        "login_url": "https://sharewood.tv/login",
-        "profile_url_template": "https://www.sharewood.tv/{username}",
-        "env_prefix": "sw",
-    },
-    {
         # Torr9 a migre de torr9.xyz -> torr9.net en avril 2026.
         # La page /stats est en maintenance cote tracker, mais /tokens (points bonus)
         # reste accessible. Le scraper degrade gracieusement : si /stats echoue,
@@ -52,11 +30,25 @@ SITES_CONFIG: List[dict] = [
         "env_prefix": "torr9",
     },
     {
+        "name": "TOS",
+        "scraper_class": Unit3DScraper,
+        "login_url": "https://theoldschool.cc/login",
+        "profile_url_template": "https://theoldschool.cc/users/{username}",
+        "env_prefix": "tos",
+    },
+    {
         "name": "G3MINI TR4CK3R",
         "scraper_class": Unit3DScraper,
         "login_url": "https://gemini-tracker.org/login",
         "profile_url_template": "https://gemini-tracker.org/users/{username}",
         "env_prefix": "gemini",
+    },
+    {
+        "name": "GF-FREE",
+        "scraper_class": Unit3DScraper,
+        "login_url": "https://generation-free.org/login",
+        "profile_url_template": "https://generation-free.org/users/{username}",
+        "env_prefix": "gf",
     },
 ]
 

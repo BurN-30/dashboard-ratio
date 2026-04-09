@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { fetchTorrentStats } from "@/lib/api";
-import { AllStats, TrackerData, Unit3DStats, SharewoodStats } from "@/types/tracker";
+import { AllStats, TrackerData, Unit3DStats } from "@/types/tracker";
 import { ArrowUp, ArrowDown, ArrowRightLeft, UploadCloud, DownloadCloud, Coins, AlertTriangle, Clock, HardDrive, FileCheck, Percent } from "lucide-react";
 import DashboardShell from "@/components/common/DashboardShell";
 import DashboardCard from "@/components/common/DashboardCard";
