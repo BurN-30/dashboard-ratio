@@ -12,6 +12,7 @@ from app.auth.jwt import get_current_user, TokenData
 from app.db.database import get_db
 from app.db.models import TrackerStats
 from app.scrapers.routes import _scrape_results
+from app.scrapers.registry import list_all_sites
 
 router = APIRouter()
 
@@ -54,11 +55,17 @@ async def get_latest_stats(
     result = await db.execute(query)
     stats_list = result.scalars().all()
 
+    # Seuls les trackers actuellement configures sont retournes
+    # (exclut les anciens trackers supprimes dont les donnees sont encore en DB)
+    configured_names = {s["name"] for s in list_all_sites()}
+
     # Formatter comme l'ancien format JSON
     response = {}
     latest_timestamp = None
 
     for stat in stats_list:
+        if stat.tracker_name not in configured_names:
+            continue
         tracker_data = {
             "ratio": str(stat.ratio) if stat.ratio else "0",
             "buffer": stat.buffer or "0",
