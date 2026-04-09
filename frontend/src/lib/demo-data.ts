@@ -73,6 +73,8 @@ export const DEMO_STATS: AllStats = {
     seed_time_avg: "2j 20h 33min",
     warnings_active: "0",
     hit_and_run: "0",
+    real_ratio: "1.03",
+    seed_size: "42.1 Go",
   },
 };
 
