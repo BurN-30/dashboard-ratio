@@ -98,7 +98,14 @@ async def get_latest_stats(
             if latest_timestamp is None or ts > latest_timestamp:
                 latest_timestamp = ts
 
-    response["_timestamp"] = latest_timestamp or int(datetime.now(timezone.utc).timestamp())
+    # Reordonner selon l'ordre du registry (SITES_CONFIG)
+    registry_order = [s["name"] for s in list_all_sites()]
+    ordered = {}
+    for name in registry_order:
+        if name in response:
+            ordered[name] = response[name]
+
+    ordered["_timestamp"] = latest_timestamp or int(datetime.now(timezone.utc).timestamp())
 
     # Ajouter les metadonnees de scrape (sante par tracker)
     scrape_meta = {}
@@ -109,9 +116,9 @@ async def get_latest_stats(
             "last_attempt_at": sr.last_attempt_at.isoformat() if sr.last_attempt_at else None,
             "consecutive_failures": sr.consecutive_failures,
         }
-    response["_scrape_meta"] = scrape_meta
+    ordered["_scrape_meta"] = scrape_meta
 
-    return response
+    return ordered
 
 
 @router.get("/history")

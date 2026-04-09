@@ -216,6 +216,13 @@ async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats) -> bool:
             logger.warning("Skip sauvegarde %s: %s", stats.tracker_name, stats.raw_data["error"])
             return False
 
+        # Ne pas sauvegarder les stats partielles (ex: Torr9 /stats en maintenance,
+        # seuls les points bonus sont remplis, ratio/buffer/volumes sont a zero).
+        # On garde les anciennes donnees completes en DB.
+        if stats.raw_data and isinstance(stats.raw_data, dict) and stats.raw_data.get("stats_status") == "maintenance":
+            logger.warning("Skip sauvegarde %s: stats partielles (maintenance), conservation des anciennes donnees", stats.tracker_name)
+            return False
+
         # Convertir ratio en float si possible
         ratio_float = None
         if stats.ratio and stats.ratio != "0":
