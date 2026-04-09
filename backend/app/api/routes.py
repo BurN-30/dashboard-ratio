@@ -11,6 +11,7 @@ from sqlalchemy import select, desc, func
 from app.auth.jwt import get_current_user, TokenData
 from app.db.database import get_db
 from app.db.models import TrackerStats
+from app.scrapers.routes import _scrape_results
 
 router = APIRouter()
 
@@ -80,6 +81,8 @@ async def get_latest_stats(
                 if key not in tracker_data and val:
                     tracker_data[key] = str(val)
 
+        tracker_data["scraped_at"] = stat.scraped_at.isoformat() if stat.scraped_at else None
+
         response[stat.tracker_name] = tracker_data
 
         # Garder le timestamp le plus recent
@@ -89,6 +92,17 @@ async def get_latest_stats(
                 latest_timestamp = ts
 
     response["_timestamp"] = latest_timestamp or int(datetime.now(timezone.utc).timestamp())
+
+    # Ajouter les metadonnees de scrape (sante par tracker)
+    scrape_meta = {}
+    for name, sr in _scrape_results.items():
+        scrape_meta[name] = {
+            "status": sr.status,
+            "last_success_at": sr.last_success_at.isoformat() if sr.last_success_at else None,
+            "last_attempt_at": sr.last_attempt_at.isoformat() if sr.last_attempt_at else None,
+            "consecutive_failures": sr.consecutive_failures,
+        }
+    response["_scrape_meta"] = scrape_meta
 
     return response
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { fetchTorrentStats, fetchTorrentHistory } from "@/lib/api";
-import { AllStats, TrackerData } from "@/types/tracker";
+import { AllStats, TrackerData, ScrapeMeta } from "@/types/tracker";
 import dynamic from "next/dynamic";
 import RefreshButton from "@/components/RefreshButton";
 import LastScrapeIndicator from "@/components/LastScrapeIndicator";
@@ -123,7 +123,10 @@ export default function Home() {
     );
   }
 
-  const trackerEntries = Object.entries(stats).filter(([name]) => name !== "_timestamp");
+  const trackerEntries = Object.entries(stats).filter(
+    ([name]) => name !== "_timestamp" && name !== "_scrape_meta"
+  );
+  const scrapeMeta = stats._scrape_meta as Record<string, ScrapeMeta> | undefined;
 
   return (
     <DashboardShell>
@@ -143,6 +146,7 @@ export default function Home() {
             name={name}
             data={data as TrackerData}
             style={{ animationDelay: `${index * 80}ms` }}
+            scrapeMeta={scrapeMeta?.[name]}
           />
         ))}
       </div>

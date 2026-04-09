@@ -28,11 +28,22 @@ export interface Unit3DStats {
   // Rewards / Points
   points_bonus: string;
   fl_tokens: string;
+
+  // Scrape metadata
+  scraped_at?: string;
 }
 
 export type TrackerData = Unit3DStats;
 
+export interface ScrapeMeta {
+  status: "ok" | "error" | "skipped";
+  last_success_at: string | null;
+  last_attempt_at: string | null;
+  consecutive_failures: number;
+}
+
 export interface AllStats {
-  [key: string]: TrackerData | number | undefined;
+  [key: string]: TrackerData | number | undefined | Record<string, ScrapeMeta>;
   _timestamp?: number;
+  _scrape_meta?: Record<string, ScrapeMeta>;
 }

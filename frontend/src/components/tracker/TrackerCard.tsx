@@ -1,12 +1,45 @@
 import React, { useCallback } from 'react';
-import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock } from 'lucide-react';
-import { TrackerData } from '@/types/tracker';
+import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock, AlertTriangle } from 'lucide-react';
+import { TrackerData, ScrapeMeta } from '@/types/tracker';
 import DashboardCard from '@/components/common/DashboardCard';
 
 interface TrackerCardProps {
   name: string;
   data: TrackerData;
   style?: React.CSSProperties;
+  scrapeMeta?: ScrapeMeta;
+}
+
+function timeAgo(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return "moins d'1h";
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}j`;
+}
+
+function isStale(data: TrackerData, scrapeMeta?: ScrapeMeta): boolean {
+  if (scrapeMeta) {
+    if (scrapeMeta.status !== 'ok') return true;
+    if (scrapeMeta.consecutive_failures > 0) return true;
+  }
+  if (data.scraped_at) {
+    const diff = Date.now() - new Date(data.scraped_at).getTime();
+    if (diff > 12 * 3600000) return true;
+  }
+  return false;
+}
+
+function staleBannerText(scrapeMeta?: ScrapeMeta): string {
+  if (scrapeMeta?.status === 'skipped') return 'Maintenance';
+  return 'Service indisponible';
+}
+
+function staleReferenceDate(data: TrackerData, scrapeMeta?: ScrapeMeta): string | null {
+  if (scrapeMeta?.last_success_at) return scrapeMeta.last_success_at;
+  if (data.scraped_at) return data.scraped_at;
+  return null;
 }
 
 // Username configurable via env var (pas de données personnelles dans le code)
@@ -22,7 +55,7 @@ const buildShopMap = (user: string): Record<string, [string, string]> => ({
 });
 const SHOP_MAP = TRACKER_USER ? buildShopMap(TRACKER_USER) : {};
 
-export default function TrackerCard({ name, data, style }: TrackerCardProps) {
+export default function TrackerCard({ name, data, style, scrapeMeta }: TrackerCardProps) {
   const getStats = (d: TrackerData) => {
     return {
       ratio: d.ratio,
@@ -55,21 +88,42 @@ export default function TrackerCard({ name, data, style }: TrackerCardProps) {
 
   const stats = getStats(data);
   const hasShop = name in SHOP_MAP;
+  const stale = isStale(data, scrapeMeta);
+  const refDate = staleReferenceDate(data, scrapeMeta);
 
   return (
-    <DashboardCard className="animate-slide-up" style={style}>
+    <DashboardCard className={`animate-slide-up${stale ? ' opacity-60' : ''}`} style={style}>
       <div className="flex items-center justify-between mb-6">
         <h4 className="text-xl font-bold text-gray-900 dark:text-white">{name}</h4>
         <span
           className={`px-3 py-1 rounded-full text-sm font-bold ${
-            parseFloat(stats.ratio) >= 1
-              ? 'bg-success-500/10 text-success-500'
-              : 'bg-error-500/10 text-error-500'
+            stale
+              ? 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+              : parseFloat(stats.ratio) >= 1
+                ? 'bg-success-500/10 text-success-500'
+                : 'bg-error-500/10 text-error-500'
           }`}
         >
           Ratio: {stats.ratio}
         </span>
       </div>
+
+      {/* Stale banner */}
+      {stale && (
+        <div className="flex items-start gap-2 rounded-md bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 px-3 py-2 mb-4">
+          <AlertTriangle className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-orange-700 dark:text-orange-400">
+              {staleBannerText(scrapeMeta)}
+            </p>
+            {refDate && (
+              <p className="text-xs text-orange-600 dark:text-orange-500">
+                Dernières données : il y a {timeAgo(refDate)}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Primary Stats */}
       <div className="grid grid-cols-2 gap-4 mb-6">
