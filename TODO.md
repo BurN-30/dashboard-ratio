@@ -142,16 +142,21 @@ Choses qu'on a discutées dans l'audit initial mais qu'on n'a pas faites
 faute de temps. À piocher quand l'envie vient.
 
 ### Backend
+- [x] **Hardware snapshots persistence** : le hw-agent envoyait des données
+  toutes les 2s mais rien n'était écrit en DB (`snapshots_total: 0`).
+  Fix : `HardwareManager._maybe_persist()` écrit un snapshot toutes les
+  60 secondes (1440/jour). Nouveaux endpoints : `GET /hardware/history`
+  (avec params `hours` et `limit`) et `GET /hardware/history/summary`.
 - [ ] **Page status frontend** consommant `/health/full` pour avoir un coup
   d'œil visuel sur tous les composants (DB, scheduler, agent, scrapers,
   derniers scrapes, services média).
 - [ ] **Notifications Telegram/Discord** quand : un tracker passe sous
   ratio 1, un H&R apparaît, l'agent hardware se déconnecte > 5 min,
   un disque dépasse 90 %, un scrape échoue 3 fois d'affilée.
-- [ ] **Downsampling de l'historique hardware** : si l'agent envoie toutes
-  les 2 sec, ça fait 43k points/jour. Garder tout sur 24h, downsamples à
-  1/min entre 24h et 7j, 1/h au-delà. Sinon `hardware_snapshots` va
-  exploser.
+- [ ] **Downsampling de l'historique hardware** : avec 1 snapshot/min,
+  ça fait 1440 lignes/jour (~525k/an). Garder tout sur 7j, downsampler
+  à 1/15min entre 7j et 30j, 1/h au-delà. Pas urgent tant que le volume
+  reste sous ~100k lignes.
 - [ ] **Healthcheck Docker** dans le compose : utiliser `/health` (le
   nouveau) qui reflète la vraie santé, pas le statique. Déjà fait dans
   le code, vérifier que Docker le respecte au prochain restart.

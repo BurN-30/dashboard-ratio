@@ -1,16 +1,24 @@
 """
 Gestionnaire de connexions hardware WebSocket.
 Gere les connexions des agents hardware et la diffusion aux clients.
+Persiste un snapshot en DB toutes les SNAPSHOT_INTERVAL secondes.
 """
 import logging
 from typing import Dict, Optional
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from fastapi import WebSocket
-import json
 import asyncio
 
+from app.db.database import async_session
+from app.db.models import HardwareSnapshot
+
 logger = logging.getLogger("dashboard.hardware")
+
+# Intervalle entre deux ecritures en DB (secondes).
+# L'agent envoie ~toutes les 2s ; persister chaque message ferait ~43k lignes/jour.
+# 60s = 1440 lignes/jour, raisonnable pour des charts sur 7-30 jours.
+SNAPSHOT_INTERVAL = 60
 
 
 @dataclass
@@ -36,6 +44,7 @@ class HardwareManager:
     - Recoit les donnees de l'agent (PC local)
     - Diffuse aux clients web connectes
     - Maintient un cache des dernieres donnees
+    - Persiste un snapshot en DB toutes les SNAPSHOT_INTERVAL secondes
     """
 
     def __init__(self):
@@ -44,6 +53,7 @@ class HardwareManager:
         self.clients: Dict[str, WebSocket] = {}
         self.latest_data: HardwareData = HardwareData()
         self._lock = asyncio.Lock()
+        self._last_persist: Optional[datetime] = None
 
     async def connect_agent(self, websocket: WebSocket, token: str) -> bool:
         """Connecte l'agent hardware."""
@@ -64,6 +74,7 @@ class HardwareManager:
             self.agent_ws = websocket
             self.agent_token = token
             self.latest_data.agent_connected = True
+            self._last_persist = None  # Reset: persist immediately on new agent
 
             logger.info("Agent connecte")
             return True
@@ -74,6 +85,7 @@ class HardwareManager:
             self.agent_ws = None
             self.agent_token = None
             self.latest_data.agent_connected = False
+            self._last_persist = None
             logger.info("Agent deconnecte")
 
     async def connect_client(self, websocket: WebSocket, client_id: str):
@@ -97,7 +109,9 @@ class HardwareManager:
                 logger.debug("Client deconnecte: %s", client_id)
 
     async def receive_data(self, data: dict):
-        """Recoit des donnees de l'agent et les diffuse aux clients."""
+        """Recoit des donnees de l'agent, les diffuse aux clients, et persiste periodiquement."""
+        should_persist = False
+
         async with self._lock:
             self.latest_data = HardwareData(
                 cpu=data.get("cpu", {}),
@@ -113,7 +127,50 @@ class HardwareManager:
                 agent_connected=True,
             )
 
+            # Check persist eligibility inside the lock to avoid race conditions
+            now = datetime.now(timezone.utc)
+            if not self._last_persist or (now - self._last_persist).total_seconds() >= SNAPSHOT_INTERVAL:
+                should_persist = True
+                self._last_persist = now  # Claim the slot immediately
+
         await self.broadcast()
+
+        if should_persist:
+            await self._persist_snapshot(data, now)
+
+    async def _persist_snapshot(self, data: dict, recorded_at: datetime):
+        """Ecrit un snapshot en DB. Appelé seulement quand le check d'intervalle a passé."""
+        try:
+            cpu = data.get("cpu") or {}
+            ram = data.get("ram") or {}
+            gpu = data.get("gpu") or {}
+            storage_data = data.get("storage")
+            if not isinstance(storage_data, list):
+                storage_data = []
+
+            snapshot = HardwareSnapshot(
+                cpu_usage=cpu.get("usage"),
+                cpu_temp=cpu.get("temp"),
+                cpu_name=cpu.get("name"),
+                ram_used_percent=ram.get("used_percent"),
+                ram_used_gb=ram.get("used_gb"),
+                ram_total_gb=ram.get("total_gb"),
+                gpu_usage=gpu.get("usage"),
+                gpu_temp=gpu.get("temp"),
+                gpu_name=gpu.get("name"),
+                gpu_vram_used=gpu.get("memory_used"),  # Agent sends "memory_used"
+                storage=storage_data,
+                raw_data=data,
+                recorded_at=recorded_at,
+            )
+
+            async with async_session() as session:
+                session.add(snapshot)
+                await session.commit()
+
+            logger.debug("Hardware snapshot persisted to DB")
+        except Exception as e:
+            logger.warning("Failed to persist hardware snapshot: %s", e, exc_info=True)
 
     async def broadcast(self):
         """Diffuse les dernieres donnees a tous les clients."""

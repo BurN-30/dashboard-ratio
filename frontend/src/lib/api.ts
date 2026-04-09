@@ -324,6 +324,50 @@ export async function fetchHardwareStats(): Promise<HardwareStats | null> {
 }
 
 /**
+ * Entrée d'historique hardware (snapshot persisté en DB toutes les 60s)
+ */
+export interface HardwareHistoryEntry {
+  cpu: { usage: number | null; temp: number | null; name: string | null };
+  ram: { used_percent: number | null; used_gb: number | null; total_gb: number | null };
+  gpu: { usage: number | null; temp: number | null; name: string | null; vram_used: number | null };
+  storage: Array<Record<string, unknown>>;
+  recorded_at: string;
+}
+
+/**
+ * Récupère l'historique hardware depuis la DB
+ */
+export async function fetchHardwareHistory(
+  hours: number = 24,
+  limit: number = 1000
+): Promise<HardwareHistoryEntry[] | null> {
+  try {
+    return await apiFetch<HardwareHistoryEntry[]>(
+      `/hardware/history?hours=${hours}&limit=${limit}`
+    );
+  } catch (error) {
+    console.error('Error fetching hardware history:', error);
+    return null;
+  }
+}
+
+/**
+ * Résumé de l'historique hardware (count + plage temporelle)
+ */
+export async function fetchHardwareHistorySummary(): Promise<{
+  total_snapshots: number;
+  oldest_at: string | null;
+  newest_at: string | null;
+} | null> {
+  try {
+    return await apiFetch(`/hardware/history/summary`);
+  } catch (error) {
+    console.error('Error fetching hardware history summary:', error);
+    return null;
+  }
+}
+
+/**
  * Récupère le status de l'agent hardware
  */
 export async function getHardwareStatus(): Promise<{
