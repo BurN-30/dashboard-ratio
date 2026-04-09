@@ -61,7 +61,7 @@ Files synced. Next steps on the VPS :
   docker compose logs -f
 
   # Capture des cookies trackers (depuis l'IP du VPS, important !) :
-  docker compose exec backend python capture_cookies.py "Sharewood" "https://sharewood.tv/login"
+  docker compose exec backend python capture_cookies.py "GF-FREE" "https://generation-free.org/login"
 
 ========================================
 EOF

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { fetchTorrentStats } from "@/lib/api";
-import { AllStats, TrackerData, Unit3DStats, SharewoodStats } from "@/types/tracker";
+import { AllStats, TrackerData, Unit3DStats } from "@/types/tracker";
 
 export default function WarningsPage() {
   const [stats, setStats] = useState<AllStats | null>(null);
@@ -54,18 +54,12 @@ function WarningCard({ name, data }: { name: string; data: TrackerData }) {
     return (data as Unit3DStats).real_ratio !== undefined;
   };
 
-  const isSharewood = name === 'Sharewood';
-
   let warnings = "0";
   let hitAndRun = "0";
 
   if (isUnit3D(data)) {
     warnings = data.warnings_active;
     hitAndRun = data.hit_and_run;
-  } else if (isSharewood) {
-    const s = data as SharewoodStats;
-    warnings = s.warnings_active || "0 / 3";
-    hitAndRun = s.hit_and_run || "0";
   }
 
   // Determine status color

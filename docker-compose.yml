@@ -54,9 +54,6 @@ services:
       - SCRAPE_INTERVAL=${SCRAPE_INTERVAL:-3600}
       - DOMAIN=${DOMAIN:-example.com}
       # Tracker credentials
-      - SW_USER=${SW_USER}
-      - SW_PASS=${SW_PASS}
-      - SW_USERNAME=${SW_USERNAME}
       - GF_USER=${GF_USER}
       - GF_PASS=${GF_PASS}
       - GF_USERNAME=${GF_USERNAME}

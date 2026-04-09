@@ -15,7 +15,7 @@ Dashboard personnel pour suivre les stats de trackers torrent privés et monitor
 **Statistiques Trackers**
 - Ratio, buffer, upload/download, bonus points par tracker
 - Graphiques d'historique sur 30 jours
-- Support UNIT3D (Generation-Free, TheOldSchool, Gemini), Sharewood, Torr9
+- Support UNIT3D (Generation-Free, TheOldSchool, Gemini), Torr9
 - Liens rapides vers les boutiques bonus
 - Scraping automatique à 8h/14h/20h (Europe/Paris)
 
@@ -98,7 +98,6 @@ Variables critiques :
 | `DATABASE_URL` | URL PostgreSQL (cohérente avec POSTGRES_*) |
 | `POSTGRES_PASSWORD` | Mot de passe Postgres |
 | `TRACKER_USERNAME` | Pseudo affiché dans les liens shop bonus |
-| `SW_USER/PASS/USERNAME` | Identifiants Sharewood |
 | `GF_USER/PASS/USERNAME` | Identifiants Generation-Free |
 | `TOS_USER/PASS/USERNAME` | Identifiants TheOldSchool |
 | `GEMINI_USER/PASS/USERNAME` | Identifiants Gemini Tracker |
@@ -188,7 +187,7 @@ L'agent envoie les stats hardware toutes les 2 secondes via WebSocket.
 Le scraper utilise des cookies persistants pour éviter de re-login à chaque scrape (et pour passer les captchas anti-bot type Gemini). Capture les cookies depuis le VPS :
 
 ```bash
-docker compose exec backend python capture_cookies.py "Sharewood" "https://sharewood.tv/login"
+docker compose exec backend python capture_cookies.py "GF-FREE" "https://generation-free.org/login"
 ```
 
 Un Chromium s'ouvre, login manuellement, ferme l'onglet — les cookies sont sauvegardés dans le volume `cookies-data`.

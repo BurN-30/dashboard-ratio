@@ -39,9 +39,8 @@ class TestStats:
         assert resp.status_code == 200
         data = resp.json()
 
-        # Verifie qu'on a les 3 trackers
+        # Verifie qu'on a les 2 trackers du seeded_db
         assert "GF-FREE" in data
-        assert "Sharewood" in data
         assert "TOS" in data
 
         # Verifie les valeurs GF (le plus recent)

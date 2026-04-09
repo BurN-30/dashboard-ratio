@@ -166,7 +166,7 @@ faute de temps. À piocher quand l'envie vient.
   (763 lignes du template TailAdmin, beaucoup ne servent plus).
 - [ ] **Comparatif inter-trackers** : graph empilé, classement par buffer
   ou ratio, "où est ta donnée la plus rentable".
-- [ ] **Détection d'anomalies** : Sharewood buffer qui chute brutalement,
+- [ ] **Détection d'anomalies** : buffer qui chute brutalement,
   ratio qui dévisse, points bonus qui n'augmentent plus → tag visuel
   "anomalie" sur la TrackerCard.
 

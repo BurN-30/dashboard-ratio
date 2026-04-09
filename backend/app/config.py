@@ -64,11 +64,6 @@ class Settings(BaseSettings):
     media_tautulli_url: Optional[str] = Field(default=None, description="URL Tautulli (ex: http://192.168.1.x:8181)")
     media_tautulli_api_key: Optional[str] = Field(default=None, description="Clé API Tautulli")
 
-    # Tracker Credentials - Sharewood
-    sw_user: Optional[str] = None
-    sw_pass: Optional[str] = None
-    sw_username: Optional[str] = None
-
     # Tracker Credentials - Generation-Free
     gf_user: Optional[str] = None
     gf_pass: Optional[str] = None
