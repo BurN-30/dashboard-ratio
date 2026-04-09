@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { useHardwareStats } from '@/hooks/useHardwareStats';
 import DashboardShell from '@/components/common/DashboardShell';
 import DashboardCard from '@/components/common/DashboardCard';
@@ -21,6 +22,11 @@ import {
   Fan,
   TrendingUp
 } from 'lucide-react';
+
+const HardwareHistoryChart = dynamic(
+  () => import('@/components/charts/HardwareHistoryChart'),
+  { ssr: false }
+);
 
 // CPU History SVG chart
 const CpuChart = ({ history }: { history: { time: string; cpu: number; ram: number }[] }) => {
@@ -194,6 +200,11 @@ export default function HardwareMonitor() {
               color="text-cyan-400"
               style={{ animationDelay: '240ms' }}
             />
+          </div>
+
+          {/* Hardware History Chart */}
+          <div className="mb-6">
+            <HardwareHistoryChart />
           </div>
 
           {/* Main Grid */}
