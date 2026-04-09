@@ -3,6 +3,7 @@ Routes API pour les scrapers.
 """
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
@@ -27,6 +28,19 @@ router = APIRouter()
 
 # Flag pour eviter les scrapes simultanees
 _scraping_in_progress = False
+
+
+@dataclass
+class ScrapeResult:
+    tracker_name: str
+    status: str  # "ok", "error", "skipped"
+    last_success_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    last_error: str | None = None
+    consecutive_failures: int = 0
+
+
+_scrape_results: dict[str, ScrapeResult] = {}
 
 
 class ScrapeStatus(BaseModel):
@@ -126,13 +140,42 @@ async def run_single_scraper(
 
 async def _scrape_single(name: str, scraper, browser) -> None:
     """Scrape un tracker et sauvegarde en DB."""
+    now = datetime.now(timezone.utc)
+
+    # Initialiser l'entree si elle n'existe pas encore
+    if name not in _scrape_results:
+        _scrape_results[name] = ScrapeResult(tracker_name=name, status="ok")
+
+    _scrape_results[name].last_attempt_at = now
+
     try:
         logger.info("Demarrage: %s", name)
         stats = await scraper.run(browser)
         async with async_session() as db:
-            await save_stats_to_db(db, stats)
-        logger.info("Termine: %s", name)
+            saved = await save_stats_to_db(db, stats)
+
+        if saved:
+            _scrape_results[name].status = "ok"
+            _scrape_results[name].last_success_at = now
+            _scrape_results[name].consecutive_failures = 0
+            _scrape_results[name].last_error = None
+            logger.info("Termine: %s", name)
+        else:
+            # save_stats_to_db a skippe (donnees en erreur)
+            reason = (
+                stats.raw_data.get("error", "unknown skip reason")
+                if stats.raw_data and isinstance(stats.raw_data, dict)
+                else "unknown skip reason"
+            )
+            _scrape_results[name].status = "skipped"
+            _scrape_results[name].last_error = reason
+            _scrape_results[name].consecutive_failures += 1
+            logger.warning("Skippe: %s (%s)", name, reason)
+
     except Exception as e:
+        _scrape_results[name].status = "error"
+        _scrape_results[name].last_error = str(e)
+        _scrape_results[name].consecutive_failures += 1
         logger.error("Erreur %s: %s", name, e)
 
 
@@ -165,13 +208,13 @@ async def run_scraping_task(db: AsyncSession = None, tracker_name: Optional[str]
         _scraping_in_progress = False
 
 
-async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats):
-    """Sauvegarde les stats en base de donnees."""
+async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats) -> bool:
+    """Sauvegarde les stats en base de donnees. Retourne True si sauvegarde, False si skippe."""
     try:
         # Ne pas sauvegarder les stats en erreur (login_failed, etc.)
         if stats.raw_data and isinstance(stats.raw_data, dict) and "error" in stats.raw_data:
             logger.warning("Skip sauvegarde %s: %s", stats.tracker_name, stats.raw_data["error"])
-            return
+            return False
 
         # Convertir ratio en float si possible
         ratio_float = None
@@ -202,16 +245,29 @@ async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats):
 
         db.add(db_stats)
         await db.commit()
+        return True
 
     except Exception as e:
         logger.error("Erreur sauvegarde DB: %s", e)
         await db.rollback()
+        return False
 
 
 @router.get("/status")
 async def get_scraper_status():
     """Retourne le status du scraper."""
+    tracker_status = {}
+    for name, sr in _scrape_results.items():
+        tracker_status[name] = {
+            "status": sr.status,
+            "last_success_at": sr.last_success_at.isoformat() if sr.last_success_at else None,
+            "last_attempt_at": sr.last_attempt_at.isoformat() if sr.last_attempt_at else None,
+            "last_error": sr.last_error,
+            "consecutive_failures": sr.consecutive_failures,
+        }
+
     return {
         "scraping_in_progress": _scraping_in_progress,
         "configured_scrapers": list_available_scrapers(),
+        "tracker_status": tracker_status,
     }
