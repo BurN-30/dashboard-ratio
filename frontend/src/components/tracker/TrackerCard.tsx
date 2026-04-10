@@ -56,12 +56,12 @@ const buildShopMap = (user: string): Record<string, [string, string]> => ({
 const SHOP_MAP = TRACKER_USER ? buildShopMap(TRACKER_USER) : {};
 
 // Max redeem tier par tracker (meilleur ratio points/GB).
-// null = pas de redeem connu. Ajuster les valeurs selon les sites.
+// Valeurs scrapees le 2026-04-10 depuis les pages boutique.
 const MAX_REDEEM: Record<string, number> = {
-  'Torr9': 12000,           // TODO: verifier la vraie valeur
-  'TOS': 100000,            // TODO: verifier
-  'G3MINI TR4CK3R': 100000, // TODO: verifier
-  'GF-FREE': 100000,        // TODO: verifier
+  'Torr9': 4150,            // 1 To Upload
+  'TOS': 150000,            // 500 GiB Upload
+  'G3MINI TR4CK3R': 80000,  // 500 GiB Upload
+  'GF-FREE': 630000,        // 500 GiB Upload
 };
 
 export default function TrackerCard({ name, data, style, scrapeMeta }: TrackerCardProps) {
