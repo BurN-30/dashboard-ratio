@@ -55,6 +55,15 @@ const buildShopMap = (user: string): Record<string, [string, string]> => ({
 });
 const SHOP_MAP = TRACKER_USER ? buildShopMap(TRACKER_USER) : {};
 
+// Max redeem tier par tracker (meilleur ratio points/GB).
+// null = pas de redeem connu. Ajuster les valeurs selon les sites.
+const MAX_REDEEM: Record<string, number> = {
+  'Torr9': 12000,           // TODO: verifier la vraie valeur
+  'TOS': 100000,            // TODO: verifier
+  'G3MINI TR4CK3R': 100000, // TODO: verifier
+  'GF-FREE': 100000,        // TODO: verifier
+};
+
 export default function TrackerCard({ name, data, style, scrapeMeta }: TrackerCardProps) {
   const getStats = (d: TrackerData) => {
     return {
@@ -145,6 +154,26 @@ export default function TrackerCard({ name, data, style, scrapeMeta }: TrackerCa
             <Coins className={`w-4 h-4 text-yellow-500 ${hasShop ? 'group-hover:text-yellow-400 transition-colors' : ''}`} />
             <p className={`text-lg font-bold text-brand-500 ${hasShop ? 'group-hover:underline' : ''}`}>{stats.points}</p>
           </div>
+          {(() => {
+            const maxRedeem = MAX_REDEEM[name];
+            if (!maxRedeem) return null;
+            const current = parseFloat((stats.points || '0').replace(/[^\d]/g, '')) || 0;
+            const pct = Math.min((current / maxRedeem) * 100, 100);
+            const ready = current >= maxRedeem;
+            return (
+              <div className="mt-1" title={`${current.toLocaleString()} / ${maxRedeem.toLocaleString()} pour redeem max`}>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                  <div
+                    className={`h-full rounded-full transition-all ${ready ? 'bg-success-500' : 'bg-yellow-500/70'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-0.5 text-right">
+                  {ready ? 'redeem dispo' : `/ ${(maxRedeem / 1000).toFixed(0)}k`}
+                </p>
+              </div>
+            );
+          })()}
         </div>
         <div className="space-y-1">
           <p className="text-xs text-gray-500 uppercase">Upload Vol.</p>

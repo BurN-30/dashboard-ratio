@@ -23,7 +23,10 @@ from app.scrapers.registry import (
     list_all_sites,
 )
 from app.scrapers.base import ScrapedStats
-from app.notifications import notify_scrape_failures, notify_scrape_recovery, notify_ratio_drop
+from app.notifications import (
+    notify_scrape_failures, notify_scrape_recovery,
+    notify_ratio_critical, notify_hit_and_run, notify_hit_and_run_critical,
+)
 
 router = APIRouter()
 
@@ -39,6 +42,7 @@ class ScrapeResult:
     last_attempt_at: datetime | None = None
     last_error: str | None = None
     consecutive_failures: int = 0
+    last_known_hnr: int = 0  # Pour detecter les nouveaux H&R
 
 
 _scrape_results: dict[str, ScrapeResult] = {}
@@ -166,15 +170,29 @@ async def _scrape_single(name: str, scraper, browser) -> None:
             # Notification: recovery apres echecs
             await notify_scrape_recovery(name, prev_failures)
 
-            # Notification: ratio drop sous 1.0
+            # Notification: ratio sous 0.85
             ratio_val = None
             if stats.ratio and stats.ratio != "0":
                 try:
                     ratio_val = float(stats.ratio.replace(",", "."))
                 except ValueError:
                     pass
-            if ratio_val is not None and ratio_val < 1.0:
-                await notify_ratio_drop(name, 1.0, ratio_val)
+            if ratio_val is not None and ratio_val < 0.85:
+                await notify_ratio_critical(name, ratio_val)
+
+            # Notification: Hit & Run
+            hnr_val = 0
+            if stats.hit_and_run and stats.hit_and_run != "0":
+                try:
+                    hnr_val = int(stats.hit_and_run.split()[0])
+                except (ValueError, IndexError):
+                    pass
+            prev_hnr = _scrape_results[name].last_known_hnr
+            if hnr_val > prev_hnr:
+                await notify_hit_and_run(name, hnr_val)
+            if hnr_val >= 2:
+                await notify_hit_and_run_critical(name, hnr_val)
+            _scrape_results[name].last_known_hnr = hnr_val
         else:
             # save_stats_to_db a skippe (donnees en erreur)
             reason = (
