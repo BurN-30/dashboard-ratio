@@ -12,7 +12,7 @@ import asyncio
 
 from app.db.database import async_session
 from app.db.models import HardwareSnapshot
-from app.notifications import notify_agent_disconnect, notify_agent_reconnect, notify_disk_critical
+from app.notifications import notify_agent_disconnect, notify_agent_reconnect
 
 logger = logging.getLogger("dashboard.hardware")
 
@@ -160,12 +160,6 @@ class HardwareManager:
 
         if should_persist:
             await self._persist_snapshot(data, now)
-            # Check disques critiques (>90%) au meme rythme que la persistence
-            for drive in (data.get("storage") or []):
-                pct = drive.get("percent", 0)
-                name = drive.get("device") or drive.get("name", "?")
-                if pct and pct >= 90:
-                    await notify_disk_critical(name, pct)
 
     async def _persist_snapshot(self, data: dict, recorded_at: datetime):
         """Ecrit un snapshot en DB. Appelé seulement quand le check d'intervalle a passé."""
