@@ -12,6 +12,7 @@ import asyncio
 
 from app.db.database import async_session
 from app.db.models import HardwareSnapshot
+from app.notifications import notify_agent_disconnect, notify_agent_reconnect, notify_disk_critical
 
 logger = logging.getLogger("dashboard.hardware")
 
@@ -54,6 +55,8 @@ class HardwareManager:
         self.latest_data: HardwareData = HardwareData()
         self._lock = asyncio.Lock()
         self._last_persist: Optional[datetime] = None
+        self._disconnect_notified: bool = False
+        self._disconnect_checker: Optional[asyncio.Task] = None
 
     async def connect_agent(self, websocket: WebSocket, token: str) -> bool:
         """Connecte l'agent hardware."""
@@ -76,6 +79,13 @@ class HardwareManager:
             self.latest_data.agent_connected = True
             self._last_persist = None  # Reset: persist immediately on new agent
 
+            # Cancel le checker de deconnexion et notifier la reconnexion
+            if self._disconnect_checker and not self._disconnect_checker.done():
+                self._disconnect_checker.cancel()
+            if self._disconnect_notified:
+                self._disconnect_notified = False
+                asyncio.create_task(notify_agent_reconnect())
+
             logger.info("Agent connecte")
             return True
 
@@ -87,6 +97,19 @@ class HardwareManager:
             self.latest_data.agent_connected = False
             self._last_persist = None
             logger.info("Agent deconnecte")
+
+        # Lancer un timer: si pas reconnecte dans 5 min, notifier
+        self._disconnect_checker = asyncio.create_task(self._check_disconnect_timeout())
+
+    async def _check_disconnect_timeout(self):
+        """Attend 5 min apres deconnexion, puis notifie si toujours deconnecte."""
+        try:
+            await asyncio.sleep(300)  # 5 minutes
+            if not self.is_agent_connected and not self._disconnect_notified:
+                self._disconnect_notified = True
+                await notify_agent_disconnect()
+        except asyncio.CancelledError:
+            pass
 
     async def connect_client(self, websocket: WebSocket, client_id: str):
         """Connecte un client web."""
@@ -137,6 +160,12 @@ class HardwareManager:
 
         if should_persist:
             await self._persist_snapshot(data, now)
+            # Check disques critiques (>90%) au meme rythme que la persistence
+            for drive in (data.get("storage") or []):
+                pct = drive.get("percent", 0)
+                name = drive.get("device") or drive.get("name", "?")
+                if pct and pct >= 90:
+                    await notify_disk_critical(name, pct)
 
     async def _persist_snapshot(self, data: dict, recorded_at: datetime):
         """Ecrit un snapshot en DB. Appelé seulement quand le check d'intervalle a passé."""

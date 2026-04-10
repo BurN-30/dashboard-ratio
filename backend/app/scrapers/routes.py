@@ -23,6 +23,7 @@ from app.scrapers.registry import (
     list_all_sites,
 )
 from app.scrapers.base import ScrapedStats
+from app.notifications import notify_scrape_failures, notify_scrape_recovery, notify_ratio_drop
 
 router = APIRouter()
 
@@ -155,11 +156,25 @@ async def _scrape_single(name: str, scraper, browser) -> None:
             saved = await save_stats_to_db(db, stats)
 
         if saved:
+            prev_failures = _scrape_results[name].consecutive_failures
             _scrape_results[name].status = "ok"
             _scrape_results[name].last_success_at = now
             _scrape_results[name].consecutive_failures = 0
             _scrape_results[name].last_error = None
             logger.info("Termine: %s", name)
+
+            # Notification: recovery apres echecs
+            await notify_scrape_recovery(name, prev_failures)
+
+            # Notification: ratio drop sous 1.0
+            ratio_val = None
+            if stats.ratio and stats.ratio != "0":
+                try:
+                    ratio_val = float(stats.ratio.replace(",", "."))
+                except ValueError:
+                    pass
+            if ratio_val is not None and ratio_val < 1.0:
+                await notify_ratio_drop(name, 1.0, ratio_val)
         else:
             # save_stats_to_db a skippe (donnees en erreur)
             reason = (
@@ -171,12 +186,14 @@ async def _scrape_single(name: str, scraper, browser) -> None:
             _scrape_results[name].last_error = reason
             _scrape_results[name].consecutive_failures += 1
             logger.warning("Skippe: %s (%s)", name, reason)
+            await notify_scrape_failures(name, _scrape_results[name].consecutive_failures, reason)
 
     except Exception as e:
         _scrape_results[name].status = "error"
         _scrape_results[name].last_error = str(e)
         _scrape_results[name].consecutive_failures += 1
         logger.error("Erreur %s: %s", name, e)
+        await notify_scrape_failures(name, _scrape_results[name].consecutive_failures, str(e))
 
 
 async def run_scraping_task(db: AsyncSession = None, tracker_name: Optional[str] = None):
