@@ -2,10 +2,11 @@
 Notifications Discord via webhook.
 Non-bloquant, ne crash jamais l'app.
 
-Alertes actives :
+Alertes :
 - Scrape fail (3+ consecutifs) + recovery
-- Ratio drop sous 1.0
-- Agent hardware disconnect (>5min) + reconnect
+- Ratio sous 0.85 (@here)
+- Hit & Run nouveau + critique 2+ (@here)
+- Agent hardware offline >1h (@here) + reconnect
 """
 import logging
 from datetime import datetime, timezone
@@ -23,36 +24,41 @@ def _get_webhook_url() -> str | None:
     return url if url else None
 
 
-async def _send(embed: dict):
+async def _send(embed: dict, ping_here: bool = False):
     """Envoie un embed Discord. Fire-and-forget, ne crash jamais."""
     url = _get_webhook_url()
     if not url:
         return
 
     try:
+        payload = {"username": "TrackBoard", "embeds": [embed]}
+        if ping_here:
+            payload["content"] = "@here"
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json={"username": "TrackBoard", "embeds": [embed]})
+            resp = await client.post(url, json=payload)
             if resp.status_code not in (200, 204):
-                logger.warning("Discord webhook returned %s: %s", resp.status_code, resp.text[:200])
+                logger.warning("Discord webhook %s: %s", resp.status_code, resp.text[:200])
     except Exception as e:
-        logger.warning("Failed to send Discord notification: %s", e)
+        logger.warning("Discord notification failed: %s", e)
 
+
+# === SCRAPE ===
 
 async def notify_scrape_failures(tracker_name: str, consecutive: int, last_error: str | None):
-    """Alerte quand un tracker echoue 3+ fois de suite."""
+    """3+ echecs consecutifs."""
     if consecutive < 3:
         return
     await _send({
         "title": f"Scrape echoue : {tracker_name}",
         "description": f"**{consecutive}** echecs consecutifs.",
         "color": 0xFF4444,
-        "fields": [{"name": "Erreur", "value": f"```{(last_error or 'unknown')[:200]}```", "inline": False}],
+        "fields": [{"name": "Erreur", "value": f"```{(last_error or '?')[:200]}```", "inline": False}],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
 
 async def notify_scrape_recovery(tracker_name: str, consecutive_before: int):
-    """Quand un tracker se retablit apres 3+ echecs."""
+    """Recovery apres 3+ echecs."""
     if consecutive_before < 3:
         return
     await _send({
@@ -63,34 +69,54 @@ async def notify_scrape_recovery(tracker_name: str, consecutive_before: int):
     })
 
 
-async def notify_ratio_drop(tracker_name: str, old_ratio: float, new_ratio: float):
-    """Alerte quand un ratio passe sous 1.0."""
-    if new_ratio >= 1.0 or old_ratio < 1.0:
-        return
+# === RATIO ===
+
+async def notify_ratio_critical(tracker_name: str, ratio: float):
+    """Ratio passe sous 0.85. @here."""
     await _send({
         "title": f"Ratio critique : {tracker_name}",
-        "description": f"Ratio passe sous 1.0",
+        "description": f"Ratio a **{ratio:.2f}** (seuil : 0.85)",
+        "color": 0xFF4444,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }, ping_here=True)
+
+
+# === HIT & RUN ===
+
+async def notify_hit_and_run(tracker_name: str, count: int):
+    """Nouveau H&R detecte."""
+    await _send({
+        "title": f"Hit & Run : {tracker_name}",
+        "description": f"**{count}** H&R actif(s) detecte(s).",
         "color": 0xFF8800,
-        "fields": [
-            {"name": "Avant", "value": str(old_ratio), "inline": True},
-            {"name": "Maintenant", "value": f"**{new_ratio}**", "inline": True},
-        ],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
+
+async def notify_hit_and_run_critical(tracker_name: str, count: int):
+    """2+ H&R actifs. @here."""
+    await _send({
+        "title": f"H&R critique : {tracker_name}",
+        "description": f"**{count}** Hit & Run actifs — risque de ban.",
+        "color": 0xFF4444,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }, ping_here=True)
+
+
+# === HARDWARE AGENT ===
 
 async def notify_agent_disconnect():
-    """Agent hardware offline depuis 5 min."""
+    """PC offline depuis 1h. @here."""
     await _send({
         "title": "PC offline",
-        "description": "L'agent hardware ne repond plus depuis 5 minutes.",
+        "description": "L'agent hardware ne repond plus depuis 1 heure.",
         "color": 0xFF8800,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    }, ping_here=True)
 
 
 async def notify_agent_reconnect():
-    """Agent hardware de retour."""
+    """PC de retour."""
     await _send({
         "title": "PC de retour",
         "description": "L'agent hardware est reconnecte.",

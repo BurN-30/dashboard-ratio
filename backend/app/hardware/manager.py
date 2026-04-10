@@ -102,9 +102,9 @@ class HardwareManager:
         self._disconnect_checker = asyncio.create_task(self._check_disconnect_timeout())
 
     async def _check_disconnect_timeout(self):
-        """Attend 5 min apres deconnexion, puis notifie si toujours deconnecte."""
+        """Attend 1h apres deconnexion, puis notifie si toujours deconnecte."""
         try:
-            await asyncio.sleep(300)  # 5 minutes
+            await asyncio.sleep(3600)  # 1 heure
             if not self.is_agent_connected and not self._disconnect_notified:
                 self._disconnect_notified = True
                 await notify_agent_disconnect()
