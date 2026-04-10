@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         description="Token pour authentifier l'agent hardware"
     )
 
+    # Notifications
+    discord_webhook_url: Optional[str] = Field(
+        default=None,
+        description="URL du webhook Discord pour les alertes"
+    )
+
     # Scraper
     scrape_interval: int = Field(
         default=3600,
