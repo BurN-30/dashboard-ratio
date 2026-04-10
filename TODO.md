@@ -11,7 +11,7 @@ Ce fichier liste les actions qui restent. Coche au fur et à mesure.
 ## Sécurité — à faire en priorité
 
 - [ ] **Changer le mot de passe SSH du VPS OVH**
-  L'ancien mdp `***REDACTED***` a été partagé en clair dans la conversation Claude
+  L'ancien mdp `[REDACTED]` a été partagé en clair dans la conversation Claude
   Code du 08/04, donc considéré comme compromis.
   Sur le VPS : `passwd` (puis nouveau mdp via `openssl rand -base64 24` ou
   un gestionnaire de mdp).
@@ -23,7 +23,7 @@ Ce fichier liste les actions qui restent. Coche au fur et à mesure.
 
 - [ ] **Déposer une clé SSH propre depuis le poste de travail principal**
   Génerer si pas déjà fait : `ssh-keygen -t ed25519 -C "nom-du-poste"`
-  puis `ssh-copy-id ubuntu@***REDACTED_IP***`.
+  puis `ssh-copy-id ubuntu@<VPS_IP>`.
 
 - [ ] **Tester la connexion par clé** depuis tous les postes que tu utilises
   pour SSH au VPS, **avant** de désactiver l'auth password (sinon lockout).
@@ -197,7 +197,7 @@ faute de temps. À piocher quand l'envie vient.
 
 ### Reconnexion SSH au VPS
 ```bash
-ssh ubuntu@***REDACTED_IP***
+ssh ubuntu@<VPS_IP>
 ```
 (Et après désactivation password : ssh par clé only.)
 
