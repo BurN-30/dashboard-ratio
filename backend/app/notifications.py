@@ -5,7 +5,7 @@ Non-bloquant, ne crash jamais l'app.
 Alertes :
 - Scrape fail (3+ consecutifs) + recovery
 - Ratio sous 0.85 (@here)
-- Hit & Run nouveau + critique 2+ (@here)
+- Avertissements actifs (H&R en cours) nouveaux + critique 2+ (@here) - ignore le compteur historique
 - Agent hardware offline >1h (@here) + reconnect
 """
 import logging
@@ -84,20 +84,20 @@ async def notify_ratio_critical(tracker_name: str, ratio: float):
 # === HIT & RUN ===
 
 async def notify_hit_and_run(tracker_name: str, count: int):
-    """Nouveau H&R detecte."""
+    """Nouvel avertissement actif (H&R en cours) detecte."""
     await _send({
-        "title": f"Hit & Run : {tracker_name}",
-        "description": f"**{count}** H&R actif(s) detecte(s).",
+        "title": f"Avertissement actif : {tracker_name}",
+        "description": f"**{count}** avertissement(s) actif(s) (H&R en cours).",
         "color": 0xFF8800,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     })
 
 
 async def notify_hit_and_run_critical(tracker_name: str, count: int):
-    """2+ H&R actifs. @here."""
+    """2+ avertissements actifs. @here."""
     await _send({
-        "title": f"H&R critique : {tracker_name}",
-        "description": f"**{count}** Hit & Run actifs — risque de ban.",
+        "title": f"Avertissements critiques : {tracker_name}",
+        "description": f"**{count}** avertissements actifs (H&R en cours) — risque de ban.",
         "color": 0xFF4444,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }, ping_here=True)

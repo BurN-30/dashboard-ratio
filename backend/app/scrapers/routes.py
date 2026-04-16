@@ -42,7 +42,7 @@ class ScrapeResult:
     last_attempt_at: datetime | None = None
     last_error: str | None = None
     consecutive_failures: int = 0
-    last_known_hnr: int = 0  # Pour detecter les nouveaux H&R
+    last_known_active_warnings: int = 0  # Pour detecter les nouveaux avertissements actifs (H&R en cours)
 
 
 _scrape_results: dict[str, ScrapeResult] = {}
@@ -180,19 +180,20 @@ async def _scrape_single(name: str, scraper, browser) -> None:
             if ratio_val is not None and ratio_val < 0.85:
                 await notify_ratio_critical(name, ratio_val)
 
-            # Notification: Hit & Run
-            hnr_val = 0
-            if stats.hit_and_run and stats.hit_and_run != "0":
+            # Notification: avertissements actifs (H&R en cours uniquement,
+            # on ignore le compteur historique `hit_and_run` qui garde les H&R expires)
+            warnings_val = 0
+            if stats.warnings_active and stats.warnings_active != "0":
                 try:
-                    hnr_val = int(stats.hit_and_run.split()[0])
+                    warnings_val = int(stats.warnings_active.split()[0])
                 except (ValueError, IndexError):
                     pass
-            prev_hnr = _scrape_results[name].last_known_hnr
-            if hnr_val > prev_hnr:
-                await notify_hit_and_run(name, hnr_val)
-            if hnr_val >= 2:
-                await notify_hit_and_run_critical(name, hnr_val)
-            _scrape_results[name].last_known_hnr = hnr_val
+            prev_warnings = _scrape_results[name].last_known_active_warnings
+            if warnings_val > prev_warnings:
+                await notify_hit_and_run(name, warnings_val)
+            if warnings_val >= 2:
+                await notify_hit_and_run_critical(name, warnings_val)
+            _scrape_results[name].last_known_active_warnings = warnings_val
         else:
             # save_stats_to_db a skippe (donnees en erreur)
             reason = (
