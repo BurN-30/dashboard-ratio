@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
@@ -15,7 +17,7 @@ logger = logging.getLogger("dashboard.scraper")
 
 from app.auth.jwt import get_current_user, TokenData
 from app.db.database import async_session
-from app.db.models import TrackerStats
+from app.db.models import TrackerStats, ScraperState
 from app.scrapers.registry import (
     get_scrapers,
     get_scraper,
@@ -46,6 +48,57 @@ class ScrapeResult:
 
 
 _scrape_results: dict[str, ScrapeResult] = {}
+
+
+async def load_scraper_state_from_db() -> None:
+    """
+    Restaure _scrape_results depuis la DB au démarrage.
+    Sans ça, les compteurs (consecutive_failures, last_known_active_warnings)
+    repartiraient à zéro à chaque restart et les notifications "3+ échecs"
+    ou "nouvel avertissement actif" ne se déclencheraient jamais correctement.
+    """
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(ScraperState))
+            for row in result.scalars().all():
+                _scrape_results[row.tracker_name] = ScrapeResult(
+                    tracker_name=row.tracker_name,
+                    status="ok",
+                    last_success_at=row.last_success_at,
+                    consecutive_failures=row.consecutive_failures or 0,
+                    last_known_active_warnings=row.last_known_active_warnings or 0,
+                )
+        logger.info("Etat scraper restaure depuis la DB: %d tracker(s)", len(_scrape_results))
+    except Exception as e:
+        logger.warning("Impossible de restaurer l'etat scraper (premier run ?): %s", e)
+
+
+async def _persist_scraper_state(name: str) -> None:
+    """Upsert l'état courant d'un tracker en DB. Appelé après chaque scrape."""
+    sr = _scrape_results.get(name)
+    if sr is None:
+        return
+    try:
+        async with async_session() as db:
+            stmt = pg_insert(ScraperState).values(
+                tracker_name=sr.tracker_name,
+                consecutive_failures=sr.consecutive_failures,
+                last_success_at=sr.last_success_at,
+                last_known_active_warnings=sr.last_known_active_warnings,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["tracker_name"],
+                set_={
+                    "consecutive_failures": stmt.excluded.consecutive_failures,
+                    "last_success_at": stmt.excluded.last_success_at,
+                    "last_known_active_warnings": stmt.excluded.last_known_active_warnings,
+                    "updated_at": datetime.now(timezone.utc),
+                },
+            )
+            await db.execute(stmt)
+            await db.commit()
+    except Exception as e:
+        logger.warning("Echec persist etat scraper %s: %s", name, e)
 
 
 class ScrapeStatus(BaseModel):
@@ -213,6 +266,9 @@ async def _scrape_single(name: str, scraper, browser) -> None:
         _scrape_results[name].consecutive_failures += 1
         logger.error("Erreur %s: %s", name, e)
         await notify_scrape_failures(name, _scrape_results[name].consecutive_failures, str(e))
+
+    # Persister l'etat (compteurs) pour survivre aux restart du container.
+    await _persist_scraper_state(name)
 
 
 async def run_scraping_task(db: AsyncSession = None, tracker_name: Optional[str] = None):
