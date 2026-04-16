@@ -6,6 +6,10 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Index
 from app.db.database import Base
 
 
+def _utc_now():
+    return datetime.now(timezone.utc)
+
+
 class TrackerStats(Base):
     """Statistiques d'un tracker torrent."""
 
@@ -118,3 +122,24 @@ class HardwareSnapshot(Base):
             "storage": self.storage or [],
             "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None,
         }
+
+
+class ScraperState(Base):
+    """
+    Etat persistant du scraper par tracker. Rechargé au démarrage pour
+    que les compteurs (échecs consécutifs, avertissements actifs connus)
+    survivent aux redémarrages du container.
+    """
+
+    __tablename__ = "scraper_state"
+
+    tracker_name = Column(String(100), primary_key=True)
+    consecutive_failures = Column(Integer, default=0, nullable=False)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+    last_known_active_warnings = Column(Integer, default=0, nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=_utc_now,
+        onupdate=_utc_now,
+        nullable=False,
+    )

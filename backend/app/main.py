@@ -15,7 +15,7 @@ setup_logging()
 from app.config import get_settings  # noqa: E402
 from app.db.database import init_db  # noqa: E402
 from app.auth.routes import router as auth_router  # noqa: E402
-from app.scrapers.routes import router as scraper_router  # noqa: E402
+from app.scrapers.routes import router as scraper_router, load_scraper_state_from_db  # noqa: E402
 from app.scrapers.scheduler import start_scheduler, stop_scheduler  # noqa: E402
 from app.hardware.routes import router as hardware_router  # noqa: E402
 from app.api.routes import router as api_router  # noqa: E402
@@ -32,6 +32,10 @@ async def lifespan(app: FastAPI):
     logger.info("Initialisation de la base de donnees...")
     await init_db()
     logger.info("Base de donnees prete.")
+
+    # Restaurer les compteurs (echecs consecutifs, avertissements actifs)
+    # depuis la DB avant de lancer le scheduler.
+    await load_scraper_state_from_db()
 
     # Demarrer le planificateur de scraping automatique
     start_scheduler()
