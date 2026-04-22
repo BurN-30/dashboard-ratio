@@ -28,6 +28,7 @@ from app.scrapers.base import ScrapedStats
 from app.notifications import (
     notify_scrape_failures, notify_scrape_recovery,
     notify_ratio_critical, notify_hit_and_run, notify_hit_and_run_critical,
+    notify_parser_suspect,
 )
 
 router = APIRouter()
@@ -45,6 +46,7 @@ class ScrapeResult:
     last_error: str | None = None
     consecutive_failures: int = 0
     last_known_active_warnings: int = 0  # Pour detecter les nouveaux avertissements actifs (H&R en cours)
+    parser_suspect: bool = False  # In-memory only : dedupe l'alerte Discord "parser casse"
 
 
 _scrape_results: dict[str, ScrapeResult] = {}
@@ -196,6 +198,30 @@ async def run_single_scraper(
     )
 
 
+def _detect_parser_suspect(stats) -> tuple[bool, str]:
+    """
+    Heuristique : si points_bonus > 0 (page /tokens a repondu) mais que des champs
+    stats principaux sont vides/zeros, c'est probablement que le parser /stats est HS
+    (nouveau HTML du tracker). Sert a detecter les silent-break comme Torr9 04/2026.
+    """
+    try:
+        points_val = int((stats.points_bonus or "0").replace(" ", ""))
+    except (ValueError, AttributeError):
+        points_val = 0
+    if points_val <= 0:
+        return False, ""
+    broken = []
+    if not stats.ratio or stats.ratio in ("0", ""):
+        broken.append("ratio")
+    if not stats.vol_upload or stats.vol_upload in ("0", ""):
+        broken.append("vol_upload")
+    if not stats.vol_download or stats.vol_download in ("0", ""):
+        broken.append("vol_download")
+    if not broken:
+        return False, ""
+    return True, f"points_bonus={points_val} mais champs vides : {', '.join(broken)}"
+
+
 async def _scrape_single(name: str, scraper, browser) -> None:
     """Scrape un tracker et sauvegarde en DB."""
     now = datetime.now(timezone.utc)
@@ -247,6 +273,12 @@ async def _scrape_single(name: str, scraper, browser) -> None:
             if warnings_val >= 2:
                 await notify_hit_and_run_critical(name, warnings_val)
             _scrape_results[name].last_known_active_warnings = warnings_val
+
+            # Notification: parser suspect (tokens OK mais champs stats vides)
+            suspect, suspect_reason = _detect_parser_suspect(stats)
+            if suspect and not _scrape_results[name].parser_suspect:
+                await notify_parser_suspect(name, suspect_reason)
+            _scrape_results[name].parser_suspect = suspect
         else:
             # save_stats_to_db a skippe (donnees en erreur)
             reason = (
