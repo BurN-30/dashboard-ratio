@@ -7,6 +7,11 @@ Notes :
 - /stats peut etre temporairement en maintenance : on degrade gracieusement
   en mettant les champs concernes a "0", mais on continue a essayer /tokens
   pour le solde de points bonus.
+- La page /stats a ete refondue le 22/04/2026 : labels en majuscules
+  (UPLOAD TOTAL, DOWNLOAD TOTAL, RATIO, SEEDTIME, UPLOADÉS, COMPLÉTÉS, EN SEED)
+  et les compteurs (uploaded/completed/seed) ont maintenant leur valeur APRES
+  le label au lieu d'avant. Les valeurs utilisent une espace fine comme
+  separateur de milliers (ex "2 010").
 """
 import logging
 import re
@@ -193,41 +198,27 @@ class Torr9Scraper(BaseScraper):
                         return lines[i + 1].strip()
             return "0"
 
-        def find_value_before(keyword: str) -> str:
-            """Trouve la valeur sur la ligne PRECEDANT un keyword."""
-            keyword_lower = keyword.lower()
-            for i, line in enumerate(lines):
-                if line.lower() == keyword_lower:
-                    if i > 0:
-                        return lines[i - 1].strip()
-            return "0"
+        def clean_count(value: str) -> str:
+            """Normalise un compteur numerique ('2 010' ou '2 010' -> '2010')."""
+            v = value.replace('\xa0', '').replace(' ', '').replace(' ', '').strip()
+            return v if re.match(r'^\d+$', v) else "0"
 
         # Upload / Download totaux (label AVANT valeur)
         vol_upload = find_value_after("upload total")
         vol_download = find_value_after("download total")
 
-        # Ratio (label AVANT valeur)
-        ratio = find_value_after("ratio actuel")
+        # Ratio : nouvelle page = "RATIO" (la 1ere occurrence est le ratio du header,
+        # meme valeur que celle du bloc stats, donc on prend la premiere match).
+        ratio = find_value_after("ratio")
 
-        # Compteurs (valeur AVANT label sur Torr9!)
-        count_uploaded = find_value_before("torrents uploades")
-        if count_uploaded == "0":
-            count_uploaded = find_value_before("torrents uploadés")
-        count_completed = find_value_before("torrents completes")
-        if count_completed == "0":
-            count_completed = find_value_before("torrents complétés")
-        count_seed = find_value_before("en seed")
+        # Compteurs : valeur APRES label sur la nouvelle page /stats (22/04/2026).
+        count_uploaded = clean_count(find_value_after("uploadés"))
+        count_completed = clean_count(find_value_after("complétés"))
+        count_seed = clean_count(find_value_after("en seed"))
 
-        # Temps de seed (label AVANT, mais valeur peut etre sur 2 lignes: "6j" + "9h")
-        seed_parts = []
-        for i, line in enumerate(lines):
-            if line.lower() == "temps de seed total":
-                j = i + 1
-                while j < len(lines) and re.match(r'^[\d]+[a-zA-Z]', lines[j]):
-                    seed_parts.append(lines[j])
-                    j += 1
-                break
-        seed_total = self.format_duration(" ".join(seed_parts)) if seed_parts else "0"
+        # Temps de seed : label "SEEDTIME" suivi d'une seule ligne "32642j 4h".
+        seed_raw = find_value_after("seedtime")
+        seed_total = self.format_duration(seed_raw) if seed_raw != "0" else "0"
 
         # Buffer = upload - download
         buffer = self._compute_buffer(vol_upload, vol_download)
