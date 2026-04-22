@@ -103,6 +103,20 @@ async def notify_hit_and_run_critical(tracker_name: str, count: int):
     }, ping_here=True)
 
 
+# === PARSER ===
+
+async def notify_parser_suspect(tracker_name: str, reason: str):
+    """Scrape OK mais certains champs stats principaux sont vides alors que tokens>0.
+    Signal que le tracker a probablement change sa page et que le parser est HS."""
+    await _send({
+        "title": f"Parser suspect : {tracker_name}",
+        "description": "Certains champs stats sont vides alors que les tokens remontent. Le parser a peut-etre besoin d'une mise a jour.",
+        "color": 0xFF8800,
+        "fields": [{"name": "Detail", "value": reason[:500], "inline": False}],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 # === HARDWARE AGENT ===
 
 async def notify_agent_disconnect():

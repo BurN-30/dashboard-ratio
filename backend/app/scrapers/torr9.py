@@ -203,9 +203,48 @@ class Torr9Scraper(BaseScraper):
             v = value.replace('\xa0', '').replace(' ', '').replace(' ', '').strip()
             return v if re.match(r'^\d+$', v) else "0"
 
-        # Upload / Download totaux (label AVANT valeur)
-        vol_upload = find_value_after("upload total")
-        vol_download = find_value_after("download total")
+        def find_index(keyword: str) -> int:
+            keyword_lower = keyword.lower()
+            for i, line in enumerate(lines):
+                if line.lower() == keyword_lower:
+                    return i
+            return -1
+
+        def parse_volume_block(label: str) -> tuple[str, str, str, str, str]:
+            """
+            Parse un bloc volume (UPLOAD TOTAL ou DOWNLOAD TOTAL) :
+              LABEL / total / dont X bonus / 24h / Xh / 7j / Xj / 30j / Xj
+            Retourne (total, dont_bonus, 24h, 7j, 30j). '0' pour les manquants.
+            """
+            idx = find_index(label)
+            if idx < 0:
+                return "0", "0", "0", "0", "0"
+            total = lines[idx + 1] if idx + 1 < len(lines) else "0"
+            dont_bonus = "0"
+            d24, d7, d30 = "0", "0", "0"
+            # Stopper au prochain gros label pour ne pas deborder sur un autre bloc.
+            stop_labels = {"upload total", "download total", "seedtime", "rang", "streak", "activité", "chat", "commentaires", "uploadés", "complétés", "en seed"}
+            end = min(idx + 12, len(lines))
+            for j in range(idx + 2, end):
+                l = lines[j]
+                low = l.lower()
+                if low in stop_labels:
+                    break
+                if dont_bonus == "0" and low.startswith("dont ") and "bonus" in low:
+                    m = re.search(r'dont\s+([\d.,]+\s*[a-zA-Z]+)\s+bonus', l, re.IGNORECASE)
+                    if m:
+                        dont_bonus = m.group(1)
+                elif low == "24h" and j + 1 < len(lines):
+                    d24 = lines[j + 1]
+                elif low == "7j" and j + 1 < len(lines):
+                    d7 = lines[j + 1]
+                elif low == "30j" and j + 1 < len(lines):
+                    d30 = lines[j + 1]
+            return total, dont_bonus, d24, d7, d30
+
+        # Upload / Download totaux (+ dont_bonus + deltas 24h/7j/30j)
+        vol_upload, upload_bonus, up24, up7, up30 = parse_volume_block("upload total")
+        vol_download, download_bonus, dl24, dl7, dl30 = parse_volume_block("download total")
 
         # Ratio : nouvelle page = "RATIO" (la 1ere occurrence est le ratio du header,
         # meme valeur que celle du bloc stats, donc on prend la premiere match).
@@ -220,11 +259,33 @@ class Torr9Scraper(BaseScraper):
         seed_raw = find_value_after("seedtime")
         seed_total = self.format_duration(seed_raw) if seed_raw != "0" else "0"
 
+        # Rang + score (ex : "#5631" / "Score 501.0")
+        rang = find_value_after("rang")
+        score = "0"
+        for line in lines:
+            m = re.match(r'^score\s+([\d.,]+)\s*$', line, re.IGNORECASE)
+            if m:
+                score = m.group(1)
+                break
+
         # Buffer = upload - download
         buffer = self._compute_buffer(vol_upload, vol_download)
 
+        def clean_or_zero(v: str) -> str:
+            return self.clean_text(v) if v and v != "0" else "0"
+
         raw_data = {
             "count_uploaded_torrents": count_uploaded,
+            "upload_bonus": clean_or_zero(upload_bonus),
+            "download_bonus": clean_or_zero(download_bonus),
+            "upload_24h": clean_or_zero(up24),
+            "upload_7j": clean_or_zero(up7),
+            "upload_30j": clean_or_zero(up30),
+            "download_24h": clean_or_zero(dl24),
+            "download_7j": clean_or_zero(dl7),
+            "download_30j": clean_or_zero(dl30),
+            "rang": rang if rang != "0" else None,
+            "score": score if score != "0" else None,
         }
 
         return ScrapedStats(
