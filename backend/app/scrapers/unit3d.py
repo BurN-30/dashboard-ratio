@@ -130,6 +130,12 @@ class Unit3DScraper(BaseScraper):
             points = await get_value("Coupon", exact=True)
         if points == "0":
             points = await get_value("G3M", exact=True)
+        # Intitules renommes : G3MINI (mai 2026) et GF-FREE (octobre 2026).
+        # Correspondance exacte : "G3Ms Uploader" est un volume, pas des points.
+        if points == "0":
+            points = await get_value("G3Ms", exact=True)
+        if points == "0":
+            points = await get_value("GFrees", exact=True)
         if points == "0":
             points = await get_first_value(
                 "Bonus Points", "Points Bonus",
