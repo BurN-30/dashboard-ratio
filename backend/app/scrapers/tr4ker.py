@@ -22,12 +22,14 @@ from typing import Optional
 from playwright.async_api import Browser, Page
 
 from app.scrapers.base import BaseScraper, ScrapedStats
+from app.scrapers.boutique import enregistrer_paliers, paliers_tr4ker
 
 logger = logging.getLogger("dashboard.scraper")
 
 BASE_URL = "https://tr4ker.net"
 LOGIN_URL = f"{BASE_URL}/login"
 STATS_API = f"{BASE_URL}/api/me/stats"
+SHOP_API = f"{BASE_URL}/api/shop"
 
 
 def format_bytes(n: float) -> str:
@@ -162,6 +164,13 @@ class Tr4kerScraper(BaseScraper):
         except Exception as e:
             return ScrapedStats(tracker_name=self.name, raw_data={"error": f"api_me_stats_illisible: {e}"[:200]})
         raw = champs.pop("raw_data")
+        # Boutique (meme session, une requete) : paliers d'upload pour l'estimation des achats.
+        try:
+            rs = await page.context.request.get(SHOP_API, timeout=30000)
+            if rs.ok:
+                enregistrer_paliers(self.name, paliers_tr4ker((await rs.json()).get("items")))
+        except Exception as e:
+            logger.warning("[%s] Boutique illisible : %s", self.name, e)
         stats = ScrapedStats(tracker_name=self.name, fl_tokens="0", count_leech="0",
                              seed_time_avg=None, hit_and_run="0", raw_data=raw, **champs)
         logger.info("[%s] Scraping termine (ratio=%s, upload=%s)", self.name, stats.ratio, stats.vol_upload)

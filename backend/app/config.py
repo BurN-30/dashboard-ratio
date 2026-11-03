@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     torr9_pass: Optional[str] = None
     torr9_username: Optional[str] = None
 
+    # Tracker Credentials - Ygg (yggreborn.org) et C411 : captcha a la connexion,
+    # le scraper lit les cookies d une session ouverte a la main (capture_cookies.py)
+    ygg_user: Optional[str] = None
+    ygg_pass: Optional[str] = None
+    ygg_username: Optional[str] = None
+    c411_user: Optional[str] = None
+    c411_pass: Optional[str] = None
+    c411_username: Optional[str] = None
+
     # Tracker Credentials - Gemini
     gemini_user: Optional[str] = None
     gemini_pass: Optional[str] = None

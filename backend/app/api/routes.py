@@ -13,6 +13,7 @@ from app.db.database import get_db
 from app.db.models import TrackerStats
 from app.scrapers.routes import _scrape_results
 from app.scrapers.registry import list_all_sites
+from app.scrapers.boutique import charger_paliers, upload_achetable
 
 router = APIRouter()
 
@@ -62,6 +63,7 @@ async def get_latest_stats(
     # Formatter comme l'ancien format JSON
     response = {}
     latest_timestamp = None
+    paliers = charger_paliers()
 
     for stat in stats_list:
         if stat.tracker_name not in configured_names:
@@ -87,6 +89,11 @@ async def get_latest_stats(
             for key, val in stat.raw_data.items():
                 if key not in tracker_data and val:
                     tracker_data[key] = str(val)
+
+        # Upload que les points actuels permettent d'acheter (paliers de la boutique)
+        achetable = upload_achetable(stat.tracker_name, stat.points_bonus, paliers)
+        if achetable:
+            tracker_data["upload_achetable"] = achetable
 
         tracker_data["scraped_at"] = stat.scraped_at.isoformat() if stat.scraped_at else None
 
