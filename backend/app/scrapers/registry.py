@@ -7,6 +7,8 @@ from typing import Dict, List, Optional, Type
 from app.scrapers.base import BaseScraper, ScraperConfig
 from app.scrapers.unit3d import Unit3DScraper
 from app.scrapers.tr4ker import Tr4kerScraper
+from app.scrapers.ygg import YggScraper
+from app.scrapers.c411 import C411Scraper
 from app.config import get_settings
 
 logger = logging.getLogger("dashboard.scraper")
@@ -19,6 +21,15 @@ settings = get_settings()
 # seuls les scrapes auto sont skippes.
 SITES_CONFIG: List[dict] = [
     {
+        # Tracker principal. Captcha a la connexion : API JSON avec la session de l'utilisateur
+        # (cookies/c411.json), jamais de connexion automatique (cf C411Scraper).
+        "name": "C411",
+        "scraper_class": C411Scraper,
+        "login_url": "https://c411.org/login",
+        "profile_url_template": "https://c411.org/api/auth/me",
+        "env_prefix": "c411",
+    },
+    {
         # Ex-Torr9 (torr9.xyz, puis torr9.net), devenu TR4KER (tr4ker.net) a l'ete 2026,
         # comptes migres. Lecture par l'API JSON du site (cf Tr4kerScraper).
         # Les identifiants restent dans TORR9_USER / TORR9_PASS.
@@ -27,6 +38,15 @@ SITES_CONFIG: List[dict] = [
         "login_url": "https://tr4ker.net/login",
         "profile_url_template": "https://tr4ker.net/api/me/stats",
         "env_prefix": "torr9",
+    },
+    {
+        # Captcha a la connexion : lecture de /account/ avec la session de l'utilisateur
+        # (cookies/ygg.json), jamais de connexion automatique (cf YggScraper).
+        "name": "YGG",
+        "scraper_class": YggScraper,
+        "login_url": "https://www.yggreborn.org/login",
+        "profile_url_template": "https://www.yggreborn.org/account/",
+        "env_prefix": "ygg",
     },
     {
         "name": "TOS",

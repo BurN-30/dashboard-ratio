@@ -10,11 +10,12 @@ class TestScraperRegistry:
 
     def test_sites_config_count(self):
         """5 sites configures (GF, TOS, SW, Torr9, Gemini)."""
-        assert len(SITES_CONFIG) == 5
+        assert len(SITES_CONFIG) == 6
 
     def test_sites_config_names(self):
         names = [s["name"] for s in SITES_CONFIG]
         assert "TR4KER" in names
+        assert "C411" in names and "YGG" in names
         assert "TOS" in names
         assert "G3MINI TR4CK3R" in names
         assert "GF-FREE" in names
@@ -45,7 +46,7 @@ class TestScraperRoutes:
         assert resp.status_code == 200
         data = resp.json()
         assert "sites" in data
-        assert len(data["sites"]) == 5
+        assert len(data["sites"]) == 6
 
     async def test_available_requires_auth(self, client: AsyncClient):
         resp = await client.get("/scrapers/available")
