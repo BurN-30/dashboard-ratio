@@ -48,7 +48,7 @@ const TRACKER_USER = process.env.NEXT_PUBLIC_TRACKER_USERNAME || '';
 // Fragments d'URL construits dynamiquement (pas de lien complet en dur)
 const SP = (h: string, p: string): [string, string] => [h, p];
 const buildShopMap = (user: string): Record<string, [string, string]> => ({
-  'Torr9': SP('torr9.net', '/tokens'),
+  'TR4KER': SP('tr4ker.net', '/shop'),
   'TOS': SP('theoldschool.cc', `/users/${user}/transactions/create`),
   'G3MINI TR4CK3R': SP('gemini-tracker.org', `/users/${user}/transactions/create`),
   'GF-FREE': SP('generation-free.org', `/users/${user}/transactions/create`),
@@ -58,7 +58,6 @@ const SHOP_MAP = TRACKER_USER ? buildShopMap(TRACKER_USER) : {};
 // Max redeem tier par tracker (meilleur ratio points/GB).
 // Valeurs scrapees le 2026-04-10 depuis les pages boutique.
 const MAX_REDEEM: Record<string, number> = {
-  'Torr9': 4150,            // 1 To Upload
   'TOS': 150000,            // 500 GiB Upload
   'G3MINI TR4CK3R': 80000,  // 500 GiB Upload
   'GF-FREE': 630000,        // 500 GiB Upload

@@ -6,7 +6,7 @@ import logging
 from typing import Dict, List, Optional, Type
 from app.scrapers.base import BaseScraper, ScraperConfig
 from app.scrapers.unit3d import Unit3DScraper
-from app.scrapers.torr9 import Torr9Scraper
+from app.scrapers.tr4ker import Tr4kerScraper
 from app.config import get_settings
 
 logger = logging.getLogger("dashboard.scraper")
@@ -19,14 +19,13 @@ settings = get_settings()
 # seuls les scrapes auto sont skippes.
 SITES_CONFIG: List[dict] = [
     {
-        # Torr9 a migre de torr9.xyz -> torr9.net en avril 2026.
-        # La page /stats est en maintenance cote tracker, mais /tokens (points bonus)
-        # reste accessible. Le scraper degrade gracieusement : si /stats echoue,
-        # on continue avec /tokens uniquement (cf Torr9Scraper._gather).
-        "name": "Torr9",
-        "scraper_class": Torr9Scraper,
-        "login_url": "https://torr9.net/login",
-        "profile_url_template": "https://torr9.net/stats",
+        # Ex-Torr9 (torr9.xyz, puis torr9.net), devenu TR4KER (tr4ker.net) a l'ete 2026,
+        # comptes migres. Lecture par l'API JSON du site (cf Tr4kerScraper).
+        # Les identifiants restent dans TORR9_USER / TORR9_PASS.
+        "name": "TR4KER",
+        "scraper_class": Tr4kerScraper,
+        "login_url": "https://tr4ker.net/login",
+        "profile_url_template": "https://tr4ker.net/api/me/stats",
         "env_prefix": "torr9",
     },
     {

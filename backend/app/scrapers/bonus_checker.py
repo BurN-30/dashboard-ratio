@@ -22,12 +22,11 @@ logger = logging.getLogger("dashboard.bonus_checker")
 TIERS_FILE = "/app/cookies/bonus_tiers.json"
 
 # Pages boutique par tracker. Les UNIT3D utilisent /users/{username}/transactions/create.
-# Torr9 utilise /tokens.
+# TR4KER (ex-Torr9) n'est pas suivi ici : sa boutique (/shop) n'a pas encore de parseur.
 BONUS_PAGES = {
     "GF-FREE": "https://generation-free.org/users/{username}/transactions/create",
     "TOS": "https://theoldschool.cc/users/{username}/transactions/create",
     "G3MINI TR4CK3R": "https://gemini-tracker.org/users/{username}/transactions/create",
-    "Torr9": "https://torr9.net/tokens",
 }
 
 COOKIE_FILES = {

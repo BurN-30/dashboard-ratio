@@ -14,7 +14,7 @@ class TestScraperRegistry:
 
     def test_sites_config_names(self):
         names = [s["name"] for s in SITES_CONFIG]
-        assert "Torr9" in names
+        assert "TR4KER" in names
         assert "TOS" in names
         assert "G3MINI TR4CK3R" in names
         assert "GF-FREE" in names
