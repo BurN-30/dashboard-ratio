@@ -267,7 +267,8 @@ trackboard/
 
 ## Sécurité
 
-- JWT sur toutes les routes API et WebSocket
+- JWT sur toutes les routes de données et WebSocket ; seules `/`, `/health`, `/auth/login` et `/auth/logout` répondent sans jeton (vérifié par `tests/test_securite.py`)
+- Documentation interactive (`/docs`, `/redoc`, `/openapi.json`) coupée par défaut, `DOCS_ENABLED=true` en développement seulement
 - Rate limiting sur `/auth/login` (5 tentatives/min/IP)
 - Conteneurs DB/back/front exposés uniquement sur `127.0.0.1` (le reverse proxy host fait la passerelle publique)
 - Agent hardware authentifié par token séparé
