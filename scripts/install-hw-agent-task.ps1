@@ -163,8 +163,8 @@ if ($info.LastTaskResult -ne 0 -and $task.State -ne "Running") {
     Write-Host "       taskschd.msc -> Task Scheduler Library -> $TaskName -> History" -ForegroundColor Yellow
 } else {
     Write-Host "[OK] Le hw-agent tourne. Verifie cote backend TrackBoard :" -ForegroundColor Green
-    Write-Host "     curl https://api.<ton-domaine>/hardware/status" -ForegroundColor Green
-    Write-Host "     Doit retourner agent_connected: true" -ForegroundColor Green
+    Write-Host "     page Hardware du dashboard (connexion requise) : les mesures" -ForegroundColor Green
+    Write-Host "     doivent arriver en direct (agent_connected: true)" -ForegroundColor Green
 }
 
 Write-Host ""
