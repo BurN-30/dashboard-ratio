@@ -6,7 +6,7 @@ Fixtures partagees pour les tests.
 """
 import os
 import pytest
-from datetime import datetime
+from datetime import datetime, timedelta
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
@@ -75,6 +75,11 @@ def auth_headers(auth_token: str) -> dict:
     return {"Authorization": f"Bearer {auth_token}"}
 
 
+# Dates relatives : l'historique ne remonte que 30 jours, des dates fixes
+# sortaient de la fenetre avec le temps.
+_RECENT = datetime.now().replace(minute=0, second=0, microsecond=0) - timedelta(days=1)
+
+
 @pytest.fixture
 async def seeded_db():
     """Insere des donnees de test dans la base."""
@@ -89,7 +94,7 @@ async def seeded_db():
                 vol_download="195 Go",
                 points_bonus="1400",
                 count_seed="40",
-                scraped_at=datetime(2026, 2, 1, 10, 0, 0),
+                scraped_at=_RECENT - timedelta(days=5),
             ),
             # Snapshots recents
             TrackerStats(
@@ -103,7 +108,7 @@ async def seeded_db():
                 count_downloaded="30",
                 seed_time_total="1 an 2 mois",
                 seed_time_avg="5 j 3 h",
-                scraped_at=datetime(2026, 2, 6, 10, 0, 0),
+                scraped_at=_RECENT,
             ),
             TrackerStats(
                 tracker_name="TOS",
@@ -116,7 +121,7 @@ async def seeded_db():
                 count_downloaded="15",
                 seed_time_total="2 ans",
                 seed_time_avg="10 j",
-                scraped_at=datetime(2026, 2, 6, 10, 0, 0),
+                scraped_at=_RECENT,
             ),
         ]
         session.add_all(stats)

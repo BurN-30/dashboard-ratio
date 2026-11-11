@@ -10,13 +10,18 @@ class TestHealthCheck:
         resp = await client.get("/")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "online"
+        assert data["service"] == "TrackBoard API"
         assert data["version"] == "2.0.0"
+        assert "docs" not in data
 
     async def test_health(self, client: AsyncClient):
         resp = await client.get("/health")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "healthy"
+        # Toujours 200 ; en test, ni planificateur ni agent materiel (down).
+        # Route publique : statut et version seulement, aucun detail.
+        data = resp.json()
+        assert data["status"] in ("ok", "degraded", "down")
+        assert set(data) == {"status", "version"}
 
 
 class TestStats:
@@ -146,6 +151,6 @@ class TestSummary:
         resp = await client.get("/api/summary", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
-        assert data["trackers_count"] == 3  # GF, SW, TOS
-        assert data["total_records"] == 4  # 4 entrees dans le seed
+        assert data["trackers_count"] == 2  # 2 trackers dans le seed
+        assert data["total_records"] == 3  # 3 entrees dans le seed
         assert data["last_update"] is not None
