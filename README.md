@@ -45,13 +45,15 @@ Dashboard personnel pour suivre les stats de trackers torrent privés et monitor
 │                    │                                │  Frontend (Next.js)         │
 └────────────────────┘                                │                             │
                                                       │  Reverse proxy host         │
-       navigateur ──── HTTPS ──────────────────────► │   (nginx/caddy)             │
-                                                      │   ├── dash.DOMAIN -> :3000  │
-                                                      │   └── api.DOMAIN  -> :8000  │
+       navigateur ──── HTTPS ──────────────────────► │   (nginx/caddy, un vhost)   │
+                                                      │   ├── /auth /api /scrapers  │
+                                                      │   │   /hardware /media/     │
+                                                      │   │   /health    -> :8000   │
+                                                      │   └── le reste   -> :3000   │
                                                       └─────────────────────────────┘
 ```
 
-Le frontend et le backend sont servis sur **deux sous-domaines distincts** (multi-origin) via un reverse proxy host (nginx ou Caddy installé directement sur le serveur, pas dans le compose).
+Le frontend et le backend sont servis sous **une seule adresse** (« même origine ») par un reverse proxy installé sur l'hôte (nginx ou Caddy, pas dans le compose) : les chemins de l'API vont au backend, tout le reste au frontend. Le frontend est alors construit avec `NEXT_PUBLIC_API_URL` vide (valeur par défaut du compose). Pour servir le backend sur un autre domaine, renseigner `NEXT_PUBLIC_API_URL` avant de construire le frontend.
 
 | Composant | Stack |
 |-----------|-------|
@@ -66,8 +68,8 @@ Le frontend et le backend sont servis sur **deux sous-domaines distincts** (mult
 ## Prérequis
 
 - VPS avec Docker, Docker Compose
-- Reverse proxy host installé (nginx ou Caddy) avec certificats SSL pour `dash.DOMAIN` et `api.DOMAIN`
-- Deux sous-domaines pointant vers le VPS : `dash.${DOMAIN}` (frontend) et `api.${DOMAIN}` (backend)
+- Reverse proxy installé sur l'hôte (nginx ou Caddy) avec un certificat pour l'adresse du dashboard
+- Une adresse pointant vers le VPS ; de préférence réservée à un réseau privé (VPN de type WireGuard ou Tailscale, filtrage `allow`/`deny` dans le vhost) plutôt qu'ouverte sur Internet
 - PC local pour l'agent hardware (Windows recommandé pour les températures via LibreHardwareMonitor)
 - Comptes sur les trackers privés à monitorer
 
@@ -91,7 +93,8 @@ Variables critiques :
 
 | Variable | Description |
 |----------|-------------|
-| `DOMAIN` | Votre domaine de base (ex: `example.com`). Le reverse proxy host servira `dash.${DOMAIN}` et `api.${DOMAIN}` |
+| `DOMAIN` | Votre domaine de base (ex: `example.com`), utilisé pour les origines CORS du backend |
+| `NEXT_PUBLIC_API_URL` | Vide (défaut) en « même origine » ; URL du backend s'il est servi sur un autre domaine (lue à la construction du frontend) |
 | `JWT_SECRET` | Clé JWT (générer avec `openssl rand -hex 32`) |
 | `ADMIN_PASSWORD` | Mot de passe admin du dashboard |
 | `HW_AGENT_TOKEN` | Token de l'agent hardware (`openssl rand -hex 16`) |
@@ -104,44 +107,58 @@ Variables critiques :
 
 ### 3. Configurer le reverse proxy host
 
-Exemple nginx (`/etc/nginx/sites-available/trackboard`) :
+Exemple nginx en « même origine » (`/etc/nginx/sites-available/trackboard`) :
 
 ```nginx
-# Frontend dashboard
+# Journal sans la chaîne de requête : les WebSocket portent leur jeton dans l'URL
+log_format trackboard_sans_requete '$remote_addr - [$time_local] "$request_method $uri $server_protocol" '
+                                   '$status $body_bytes_sent "$http_user_agent"';
+
+map $http_upgrade $trackboard_connexion {
+    default upgrade;
+    ''      close;
+}
+
 server {
     server_name dash.example.com;
     listen 443 ssl;
-    # ... SSL via Let's Encrypt (certbot --nginx)
+    # ... certificat (certbot --nginx, ou celui du VPN)
 
+    # Accès réservé à un réseau privé (exemple : plage d'adresses du VPN)
+    # allow 10.0.0.0/8;
+    # deny  all;
+
+    access_log /var/log/nginx/trackboard.access.log trackboard_sans_requete;
+
+    # API FastAPI, WebSocket /hardware/ws/agent et /hardware/ws/client compris
+    location ~ ^/(auth|api|scrapers|hardware|media|health)(/|$) {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $trackboard_connexion;
+        proxy_read_timeout 86400;     # WebSocket de longue durée
+    }
+
+    # /media (sans barre finale) est une page du frontend, pas l'API /media/...
+    location = /media {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Frontend Next.js
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-
-# Backend API + WebSocket hardware
-server {
-    server_name api.example.com;
-    listen 443 ssl;
-    # ... SSL via Let's Encrypt
-
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;     # WebSocket long polling
     }
 }
 ```
@@ -153,7 +170,7 @@ docker compose up -d
 docker compose logs -f
 ```
 
-Les containers exposent leurs ports sur `127.0.0.1` uniquement. Le reverse proxy host les proxifie publiquement.
+Les containers exposent leurs ports sur `127.0.0.1` uniquement ; seul le reverse proxy de l'hôte les sert. Le backend est plafonné à 1 500 Mio de mémoire, sans swap (`mem_limit` dans le compose) : un emballement de Chromium reste confiné au backend au lieu d'affamer les autres services de l'hôte.
 
 ### 5. Lancer l'agent hardware (PC local)
 
@@ -170,7 +187,7 @@ powershell.exe -ExecutionPolicy Bypass -File ..\scripts\install-hw-agent-task.ps
 ```bash
 cd hw-agent
 cp .env.example .env
-# Configurer WS_URL=wss://api.votre-domaine.com/hardware/ws/agent
+# Configurer WS_URL=wss://<adresse du dashboard>/hardware/ws/agent
 # et HW_AGENT_TOKEN (même valeur que dans le .env du serveur)
 
 python -m venv venv

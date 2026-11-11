@@ -2,11 +2,14 @@
 # Stack TrackBoard : DB + backend FastAPI + frontend Next.js.
 # Le reverse proxy HTTPS est gere PAR LE HOST (nginx ou Caddy installe sur la machine,
 # pas dans le compose). Les containers exposent leurs ports sur 127.0.0.1 uniquement,
-# le reverse proxy host les proxifie ensuite vers les sous-domaines publics.
+# le reverse proxy de l'hôte les sert ensuite.
 #
-# Routing typique cote nginx/caddy host :
-#   https://dash.${DOMAIN}/  -> 127.0.0.1:3000  (frontend Next.js)
-#   https://api.${DOMAIN}/   -> 127.0.0.1:8000  (backend FastAPI + WebSocket)
+# Routage côté nginx/caddy de l'hôte, en « même origine » (un seul vhost) :
+#   /auth, /api, /scrapers, /hardware (WebSocket compris), /media/, /health
+#                            -> 127.0.0.1:8000  (backend FastAPI)
+#   tout le reste            -> 127.0.0.1:3000  (frontend Next.js)
+# Pour servir le backend sur un autre domaine, définir NEXT_PUBLIC_API_URL
+# avant de construire le frontend.
 #
 # Usage :
 #   docker compose up -d
@@ -101,10 +104,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # URL du backend appelee depuis le navigateur (figee au build de Next).
-        # Pour le multi-origin standard : https://api.${DOMAIN}
-        # Pour same-origin (un seul vhost qui route /api -> backend) : laisser vide.
-        - NEXT_PUBLIC_API_URL=https://api.${DOMAIN:-example.com}
+        # URL du backend appelée depuis le navigateur (figée au build de Next).
+        # Vide (défaut) : même origine, un seul vhost route /auth, /api, /scrapers,
+        # /hardware, /media/ et /health vers le backend, le reste vers le frontend.
+        # À renseigner seulement si le backend est servi sur un autre domaine.
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-}
         - NEXT_PUBLIC_TRACKER_USERNAME=${TRACKER_USERNAME:-}
     container_name: trackboard-frontend
     restart: unless-stopped
