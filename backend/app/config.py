@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256")
     jwt_expire_hours: int = Field(default=24)
 
+    # Documentation interactive (/docs, /redoc, /openapi.json) : coupee par defaut,
+    # DOCS_ENABLED=true en developpement seulement.
+    docs_enabled: bool = Field(default=False)
+
     # Admin
     admin_password: str = Field(
         default="admin",

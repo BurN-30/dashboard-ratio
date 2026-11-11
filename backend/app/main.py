@@ -48,16 +48,22 @@ async def lifespan(app: FastAPI):
     logger.info("Fermeture des connexions...")
 
 
-# Creation de l'application FastAPI
+# Configuration
+settings = get_settings()
+
+# Creation de l'application FastAPI. Sans DOCS_ENABLED, ni /docs, ni /redoc,
+# ni /openapi.json : le schema decrit toutes les routes et l'API est publique.
 app = FastAPI(
     title="TrackBoard API",
     description="API unifiee pour le monitoring trackers torrent + hardware + media",
     version=VERSION,
     lifespan=lifespan,
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
 
 # Configuration CORS
-settings = get_settings()
 
 cors_origins = [
     "http://localhost:3000",
@@ -97,6 +103,5 @@ async def root():
     return {
         "service": "TrackBoard API",
         "version": VERSION,
-        "docs": "/docs",
         "health": "/health",
     }

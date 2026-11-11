@@ -41,6 +41,7 @@ services:
       - JWT_EXPIRE_HOURS=24
       - ADMIN_PASSWORD=admin
       - HW_AGENT_TOKEN=dev-hw-token
+      - DOCS_ENABLED=true
       - SCRAPE_INTERVAL=3600
     volumes:
       - ./backend/app:/app/app:ro

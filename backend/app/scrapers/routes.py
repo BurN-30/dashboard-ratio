@@ -124,8 +124,8 @@ class TrackerStatsResponse(BaseModel):
 
 
 @router.get("/sites")
-async def get_sites():
-    """Liste tous les sites supportes."""
+async def get_sites(user: TokenData = Depends(get_current_user)):
+    """Liste tous les sites supportes. (Auth requise : URL de connexion des sites)"""
     return {
         "sites": list_all_sites(),
         "configured_count": len(list_available_scrapers()),
@@ -385,8 +385,8 @@ async def save_stats_to_db(db: AsyncSession, stats: ScrapedStats) -> bool:
 
 
 @router.get("/status")
-async def get_scraper_status():
-    """Retourne le status du scraper."""
+async def get_scraper_status(user: TokenData = Depends(get_current_user)):
+    """Retourne le status du scraper. (Auth requise : erreurs et sites configures)"""
     tracker_status = {}
     for name, sr in _scrape_results.items():
         tracker_status[name] = {

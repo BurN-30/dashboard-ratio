@@ -93,8 +93,8 @@ async def get_hardware_stats(user: TokenData = Depends(get_current_user)):
 
 
 @router.get("/status")
-async def get_hardware_status():
-    """Retourne le status de connexion de l'agent hardware."""
+async def get_hardware_status(user: TokenData = Depends(get_current_user)):
+    """Retourne le status de connexion de l'agent hardware. (Auth requise)"""
     return {
         "agent_connected": hardware_manager.is_agent_connected,
         "clients_count": len(hardware_manager.clients),

@@ -35,9 +35,13 @@ class TestScraperRegistry:
 class TestScraperRoutes:
     """Tests des routes /scrapers/*."""
 
-    async def test_sites_list(self, client: AsyncClient):
-        """GET /scrapers/sites est public."""
+    async def test_sites_requires_auth(self, client: AsyncClient):
+        """GET /scrapers/sites expose les URL de connexion : auth requise."""
         resp = await client.get("/scrapers/sites")
+        assert resp.status_code in (401, 403)
+
+    async def test_sites_list(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.get("/scrapers/sites", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert "sites" in data
@@ -47,8 +51,12 @@ class TestScraperRoutes:
         resp = await client.get("/scrapers/available")
         assert resp.status_code in (401, 403)
 
-    async def test_status(self, client: AsyncClient):
+    async def test_status_requires_auth(self, client: AsyncClient):
         resp = await client.get("/scrapers/status")
+        assert resp.status_code in (401, 403)
+
+    async def test_status(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.get("/scrapers/status", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert "scraping_in_progress" in data

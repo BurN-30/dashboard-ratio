@@ -3,6 +3,7 @@ Gestionnaire de connexions hardware WebSocket.
 Gere les connexions des agents hardware et la diffusion aux clients.
 Persiste un snapshot en DB toutes les SNAPSHOT_INTERVAL secondes.
 """
+import hmac
 import logging
 from typing import Dict, Optional
 from datetime import datetime, timezone
@@ -63,7 +64,8 @@ class HardwareManager:
         from app.config import get_settings
         settings = get_settings()
 
-        if token != settings.hw_agent_token:
+        # Comparaison a temps constant (jeton recu par une route publique)
+        if not hmac.compare_digest(token.encode(), settings.hw_agent_token.encode()):
             return False
 
         async with self._lock:

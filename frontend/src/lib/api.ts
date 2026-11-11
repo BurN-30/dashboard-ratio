@@ -375,10 +375,8 @@ export async function getHardwareStatus(): Promise<{
   clients_count: number;
 } | null> {
   try {
-    // Cet endpoint est public (pas besoin d'auth)
-    const response = await fetch(`${API_BASE_URL}/hardware/status`);
-    if (!response.ok) return null;
-    return response.json();
+    // Authentification requise depuis que les routes d'état ne sont plus publiques
+    return await apiFetch<{ agent_connected: boolean; clients_count: number }>('/hardware/status');
   } catch (error) {
     console.error('Error fetching hardware status:', error);
     return null;

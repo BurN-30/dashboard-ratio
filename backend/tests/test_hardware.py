@@ -46,9 +46,12 @@ class TestHardwareManager:
 class TestHardwareRoutes:
     """Tests des routes /hardware/*."""
 
-    async def test_hardware_status(self, client: AsyncClient):
-        """GET /hardware/status est public."""
+    async def test_hardware_status_requires_auth(self, client: AsyncClient):
         resp = await client.get("/hardware/status")
+        assert resp.status_code in (401, 403)
+
+    async def test_hardware_status(self, client: AsyncClient, auth_headers: dict):
+        resp = await client.get("/hardware/status", headers=auth_headers)
         assert resp.status_code == 200
         data = resp.json()
         assert "agent_connected" in data
