@@ -33,9 +33,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-WS_URL = REDACTED"WS_URL", "ws://localhost:8000/hardware/ws/agent")
-HW_AGENT_TOKEN = REDACTED"HW_AGENT_TOKEN", "")
-INTERVAL = int(REDACTED"INTERVAL", "2"))
+WS_URL = os.getenv("WS_URL", "ws://localhost:8000/hardware/ws/agent")
+HW_AGENT_TOKEN = os.getenv("HW_AGENT_TOKEN", "")
+INTERVAL = int(os.getenv("INTERVAL", "2"))
 
 # Cache pour calcul des vitesses réseau
 _last_net_io = None
