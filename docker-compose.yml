@@ -41,6 +41,10 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: trackboard-backend
+    # Plafond mémoire (Playwright/Chromium des scrapers) : sans swap, un emballement
+    # tue le backend et non un autre service de l'hôte.
+    mem_limit: 1500m
+    memswap_limit: 1500m
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"
