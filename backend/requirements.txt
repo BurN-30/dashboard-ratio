@@ -14,7 +14,9 @@ asyncpg>=0.29.0     # PostgreSQL (production)
 python-jose[cryptography]>=3.3.0
 
 # Scraping
-playwright>=1.40.0
+# < 1.65 : à partir de 1.65, le node embarqué exige libatomic1, absent de
+# python:3.12-slim (échec de « playwright install » au build).
+playwright>=1.40.0,<1.65
 
 # Validation & Config
 pydantic>=2.5.0
