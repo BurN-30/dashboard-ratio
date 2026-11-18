@@ -259,6 +259,23 @@ export async function runScraper(trackerName: string): Promise<ScrapeResult | nu
   }
 }
 
+/**
+ * Dépose la session d'un tracker à connexion manuelle (valeur du cookie de session
+ * copiée depuis le navigateur), puis attend le relevé de contrôle du backend.
+ * La valeur n'est ni conservée côté client ni renvoyée par l'API.
+ */
+export async function deposerSession(trackerName: string, valeur: string): Promise<ScrapeResult> {
+  if (IS_DEMO) return { status: 'demo', message: 'Mode démo : dépôt désactivé' };
+  try {
+    return await apiFetch<ScrapeResult>(`/scrapers/session/${encodeURIComponent(trackerName)}`, {
+      method: 'POST',
+      body: JSON.stringify({ valeur }),
+    });
+  } catch (error) {
+    return { status: 'erreur', message: error instanceof Error ? error.message : 'Erreur inconnue' };
+  }
+}
+
 // ==================== MEDIA ====================
 
 /**

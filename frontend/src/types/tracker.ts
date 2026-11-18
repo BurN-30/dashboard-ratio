@@ -40,6 +40,9 @@ export interface ScrapeMeta {
   last_success_at: string | null;
   last_attempt_at: string | null;
   consecutive_failures: number;
+  last_error?: string | null;
+  // Tracker à connexion manuelle (captcha) : la carte propose « Reconnecter ».
+  session_manuelle?: boolean;
 }
 
 export interface AllStats {

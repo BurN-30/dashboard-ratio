@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react';
-import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock, AlertTriangle } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { ArrowUp, ArrowDown, Coins, ArrowRightLeft, UploadCloud, DownloadCloud, Clock, AlertTriangle, KeyRound } from 'lucide-react';
 import { TrackerData, ScrapeMeta } from '@/types/tracker';
 import DashboardCard from '@/components/common/DashboardCard';
+import { deposerSession } from '@/lib/api';
 
 interface TrackerCardProps {
   name: string;
@@ -31,9 +32,100 @@ function isStale(data: TrackerData, scrapeMeta?: ScrapeMeta): boolean {
   return false;
 }
 
+function sessionExpiree(scrapeMeta?: ScrapeMeta): boolean {
+  if (!scrapeMeta?.session_manuelle || scrapeMeta.consecutive_failures <= 0) return false;
+  // Après un redémarrage du backend, l'erreur n'est connue qu'au relevé suivant.
+  return !scrapeMeta.last_error || scrapeMeta.last_error.startsWith('session_');
+}
+
 function staleBannerText(scrapeMeta?: ScrapeMeta): string {
+  if (sessionExpiree(scrapeMeta)) return 'Session expirée : reconnexion à faire';
   if (scrapeMeta?.status === 'skipped') return 'Maintenance';
   return 'Service indisponible';
+}
+
+/**
+ * Trackers à connexion manuelle (captcha) : après s'être connecté au site dans son
+ * navigateur, l'utilisateur colle ici la valeur du cookie de session. Le backend écrit
+ * le fichier de session et lance un relevé de contrôle.
+ */
+function Reconnexion({ name, urgent }: { name: string; urgent: boolean }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [valeur, setValeur] = useState('');
+  const [envoi, setEnvoi] = useState(false);
+  const [retour, setRetour] = useState<{ ok: boolean; texte: string } | null>(null);
+
+  const valider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!valeur.trim() || envoi) return;
+    setEnvoi(true);
+    setRetour(null);
+    const res = await deposerSession(name, valeur.trim());
+    setEnvoi(false);
+    setValeur('');
+    if (res.status === 'ok') {
+      setRetour({ ok: true, texte: 'Session acceptée, relevé réussi.' });
+      setOuvert(false);
+      window.dispatchEvent(new Event('refresh-complete'));
+    } else {
+      setRetour({ ok: false, texte: res.message || 'Session refusée.' });
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      {!ouvert && (
+        <button
+          type="button"
+          onClick={() => { setOuvert(true); setRetour(null); }}
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-md px-2.5 py-1.5 ${
+            urgent
+              ? 'bg-orange-500 text-white hover:bg-orange-600'
+              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+          }`}
+        >
+          <KeyRound className="w-3.5 h-3.5" />
+          {urgent ? 'Reconnecter' : 'Renouveler la session'}
+        </button>
+      )}
+      {ouvert && (
+        <form onSubmit={valider} className="space-y-2">
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            Se connecter au site dans le navigateur, puis F12, Application (ou Stockage), Cookies :
+            coller ici la valeur du cookie de session.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={valeur}
+              onChange={(e) => setValeur(e.target.value)}
+              placeholder="Valeur du cookie de session"
+              autoComplete="off"
+              spellCheck={false}
+              className="min-w-0 flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-gray-900 dark:text-white"
+            />
+            <button
+              type="submit"
+              disabled={envoi || !valeur.trim()}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {envoi ? 'Contrôle...' : 'Valider'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setOuvert(false); setValeur(''); }}
+              className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            >
+              Annuler
+            </button>
+          </div>
+        </form>
+      )}
+      {retour && (
+        <p className={`mt-1 text-xs ${retour.ok ? 'text-success-500' : 'text-error-500'}`}>{retour.texte}</p>
+      )}
+    </div>
+  );
 }
 
 function staleReferenceDate(data: TrackerData, scrapeMeta?: ScrapeMeta): string | null {
@@ -132,6 +224,8 @@ export default function TrackerCard({ name, data, style, scrapeMeta }: TrackerCa
           </div>
         </div>
       )}
+
+      {scrapeMeta?.session_manuelle && <Reconnexion name={name} urgent={sessionExpiree(scrapeMeta)} />}
 
       {/* Primary Stats */}
       <div className="grid grid-cols-2 gap-4 mb-6">
