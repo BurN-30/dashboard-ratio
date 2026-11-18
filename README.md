@@ -209,6 +209,24 @@ docker compose exec backend python capture_cookies.py "GF-FREE" "https://generat
 
 Un Chromium s'ouvre, login manuellement, ferme l'onglet — les cookies sont sauvegardés dans le volume `cookies-data`.
 
+#### Trackers à connexion manuelle (C411, Ygg)
+
+La connexion de ces deux sites passe par un captcha : TrackBoard ne s'y connecte jamais seul et relit la session ouverte à la main. Pour la déposer ou la renouveler, sans SSH :
+
+1. Se connecter au site dans son navigateur.
+2. F12, onglet Application (Chrome) ou Stockage (Firefox), Cookies : copier la valeur du cookie de session (`__Host-c411_session` pour C411, `__ygg_sess` pour Ygg).
+3. Dans TrackBoard, carte du tracker, « Reconnecter » (ou « Renouveler la session ») : coller la valeur, valider.
+
+Le backend (`POST /scrapers/session/{tracker}`, jeton requis, corps `{"valeur": "..."}`) écrit le fichier de cookies au format `storage_state` de Playwright et lance un relevé de contrôle ; la réponse dit si le site accepte la session. La valeur n'est ni journalisée ni renvoyée.
+
+La session C411 dure 7 jours fixes : un rappel Discord part au premier relevé à moins de 36 h de l'échéance. Celle d'Ygg est prolongée par le site à chaque relevé.
+
+### 7. Alertes Discord
+
+- Relevé en échec : une alerte au 3e échec consécutif, un rappel par 24 h tant que la panne dure, puis un message au rétablissement. Session manuelle expirée : message dédié avec la marche à suivre.
+- Avertissements actifs (hit and run en cours) sur un UNIT3D : une alerte quand le compteur augmente (`@here` à partir de 2), puis un rappel sans `@here` par 24 h tant qu'il en reste 2 ou plus. Le message liste les torrents concernés (les remettre en partage lève l'avertissement) et, si la boutique du tracker vend un rachat, son lien direct et son prix face au solde.
+- `TRACKBOARD_URL` (facultatif) : adresse de l'interface citée dans ces messages.
+
 ## Mode démo (sans backend)
 
 Pour prévisualiser l'interface avec des données fictives :
@@ -238,6 +256,8 @@ Le backend dev tourne sur `http://localhost:8000` (sans HTTPS, sans reverse prox
 ## Migrations de schéma (Alembic)
 
 Alembic est configuré pour gérer les changements de schéma sans perdre l'historique. Voir `backend/alembic/README.md` pour la procédure de bootstrap et le workflow.
+
+Tant qu'Alembic n'est pas amorcé (aucune révision, dossier absent de l'image), les tables sont créées par `create_all` au démarrage et les colonnes facultatives ajoutées depuis passent par la liste `COLONNES_AJOUTEES` de `backend/app/db/database.py` (`ALTER TABLE ... ADD COLUMN` rejoué sans effet à chaque démarrage).
 
 ## Structure du projet
 

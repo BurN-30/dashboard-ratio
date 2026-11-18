@@ -61,6 +61,7 @@ services:
       - DOCS_ENABLED=${DOCS_ENABLED:-false}
       - SCRAPE_INTERVAL=${SCRAPE_INTERVAL:-3600}
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - TRACKBOARD_URL=${TRACKBOARD_URL:-}
       - DOMAIN=${DOMAIN:-example.com}
       # Tracker credentials
       - GF_USER=${GF_USER}
