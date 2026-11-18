@@ -11,7 +11,7 @@ from sqlalchemy import select, desc, func
 from app.auth.jwt import get_current_user, TokenData
 from app.db.database import get_db
 from app.db.models import TrackerStats
-from app.scrapers.routes import _scrape_results
+from app.scrapers.routes import _scrape_results, session_manuelle
 from app.scrapers.registry import list_all_sites
 from app.scrapers.boutique import charger_paliers, upload_achetable
 
@@ -87,6 +87,9 @@ async def get_latest_stats(
         # Inclure les champs raw_data (real_ratio, seed_size, etc.)
         if stat.raw_data and isinstance(stat.raw_data, dict):
             for key, val in stat.raw_data.items():
+                # Les structures (detail des avertissements : liens du profil) restent en base.
+                if isinstance(val, (dict, list)):
+                    continue
                 if key not in tracker_data and val:
                     tracker_data[key] = str(val)
 
@@ -122,6 +125,9 @@ async def get_latest_stats(
             "last_success_at": sr.last_success_at.isoformat() if sr.last_success_at else None,
             "last_attempt_at": sr.last_attempt_at.isoformat() if sr.last_attempt_at else None,
             "consecutive_failures": sr.consecutive_failures,
+            "last_error": sr.last_error,
+            # Tracker a session manuelle : l'interface propose « Reconnecter ».
+            "session_manuelle": session_manuelle(name),
         }
     ordered["_scrape_meta"] = scrape_meta
 

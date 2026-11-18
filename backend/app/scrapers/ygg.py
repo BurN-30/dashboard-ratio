@@ -76,6 +76,10 @@ def parse_compte(texte: str) -> dict:
 class YggScraper(BaseScraper):
     """YggReborn : lecture de /account/ avec la session de l'utilisateur (jamais de connexion auto)."""
 
+    # Cookie de 7 jours renouvele par le site a chaque visite (session du 03/11/2026 encore
+    # valable le 18/11) : pas d'echeance fixe tant que les releves passent.
+    SESSION_COOKIE = {"name": "__ygg_sess", "domain": "www.yggreborn.org", "duree_jours": 7, "fixe": False}
+
     async def login(self, page: Page) -> bool:
         # Captcha a la connexion : pas de connexion automatique, par principe.
         return False

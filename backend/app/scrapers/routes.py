@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,9 +25,11 @@ from app.scrapers.registry import (
     list_all_sites,
 )
 from app.scrapers.base import ScrapedStats
+from app.config import get_settings
 from app.notifications import (
+    decider_alerte_avertissements, decider_alerte_echec, session_bientot_expiree,
     notify_scrape_failures, notify_scrape_recovery,
-    notify_ratio_critical, notify_hit_and_run, notify_hit_and_run_critical,
+    notify_ratio_critical, notify_avertissements, notify_session_bientot_expiree,
     notify_parser_suspect,
 )
 
@@ -46,6 +48,10 @@ class ScrapeResult:
     last_error: str | None = None
     consecutive_failures: int = 0
     last_known_active_warnings: int = 0  # Pour detecter les nouveaux avertissements actifs (H&R en cours)
+    last_failure_alert_at: datetime | None = None  # Derniere alerte d'echec (un rappel par 24 h)
+    last_warning_alert_at: datetime | None = None  # Derniere alerte d'avertissements (idem)
+    session_deposited_at: datetime | None = None  # Session manuelle : date du depot
+    session_expiry_alert_at: datetime | None = None  # Session manuelle : rappel d'expiration envoye
     parser_suspect: bool = False  # In-memory only : dedupe l'alerte Discord "parser casse"
 
 
@@ -69,6 +75,10 @@ async def load_scraper_state_from_db() -> None:
                     last_success_at=row.last_success_at,
                     consecutive_failures=row.consecutive_failures or 0,
                     last_known_active_warnings=row.last_known_active_warnings or 0,
+                    last_failure_alert_at=row.last_failure_alert_at,
+                    last_warning_alert_at=row.last_warning_alert_at,
+                    session_deposited_at=row.session_deposited_at,
+                    session_expiry_alert_at=row.session_expiry_alert_at,
                 )
         logger.info("Etat scraper restaure depuis la DB: %d tracker(s)", len(_scrape_results))
     except Exception as e:
@@ -87,6 +97,10 @@ async def _persist_scraper_state(name: str) -> None:
                 consecutive_failures=sr.consecutive_failures,
                 last_success_at=sr.last_success_at,
                 last_known_active_warnings=sr.last_known_active_warnings,
+                last_failure_alert_at=sr.last_failure_alert_at,
+                last_warning_alert_at=sr.last_warning_alert_at,
+                session_deposited_at=sr.session_deposited_at,
+                session_expiry_alert_at=sr.session_expiry_alert_at,
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=["tracker_name"],
@@ -94,6 +108,10 @@ async def _persist_scraper_state(name: str) -> None:
                     "consecutive_failures": stmt.excluded.consecutive_failures,
                     "last_success_at": stmt.excluded.last_success_at,
                     "last_known_active_warnings": stmt.excluded.last_known_active_warnings,
+                    "last_failure_alert_at": stmt.excluded.last_failure_alert_at,
+                    "last_warning_alert_at": stmt.excluded.last_warning_alert_at,
+                    "session_deposited_at": stmt.excluded.session_deposited_at,
+                    "session_expiry_alert_at": stmt.excluded.session_expiry_alert_at,
                     "updated_at": datetime.now(timezone.utc),
                 },
             )
@@ -198,6 +216,107 @@ async def run_single_scraper(
     )
 
 
+def session_manuelle(name: str) -> bool:
+    """Vrai pour un tracker dont la session est deposee a la main (captcha a la connexion)."""
+    scraper = get_scraper(name)
+    return bool(scraper and scraper.SESSION_COOKIE)
+
+
+def _reconnexion(scraper) -> Optional[dict]:
+    """Elements de la marche a suivre de reconnexion (None hors session manuelle)."""
+    if not getattr(scraper, "SESSION_COOKIE", None):
+        return None
+    return {
+        "login_url": scraper.config.login_url,
+        "cookie": scraper.SESSION_COOKIE["name"],
+        "trackboard_url": get_settings().trackboard_url,
+    }
+
+
+def nettoyer_valeur_cookie(valeur, nom: str) -> Optional[str]:
+    """
+    Valeur collee par l'utilisateur -> valeur du cookie, ou None si elle est inutilisable.
+    Accepte « nom=valeur » et les guillemets autour ; refuse tout caractere interdit dans
+    une valeur de cookie (espace, point-virgule, virgule, guillemet, antislash, controle).
+    """
+    if not isinstance(valeur, str):
+        return None
+    valeur = valeur.strip()
+    if valeur.startswith(nom + "="):
+        valeur = valeur[len(nom) + 1:]
+    valeur = valeur.strip().strip('"').strip()
+    if not 16 <= len(valeur) <= 4096:
+        return None
+    if any(c in ' ";,\\' or not 0x21 <= ord(c) <= 0x7E for c in valeur):
+        return None
+    return valeur
+
+
+async def _signaler_echec(name: str, scraper, raison: str, maintenant: datetime) -> None:
+    """Alerte d'echec : une au 3e echec consecutif, puis un rappel par 24 h."""
+    sr = _scrape_results[name]
+    decision = decider_alerte_echec(sr.consecutive_failures, sr.last_failure_alert_at, maintenant)
+    if decision:
+        await notify_scrape_failures(
+            name, sr.consecutive_failures, raison,
+            rappel=(decision == "rappel"), reconnexion=_reconnexion(scraper),
+        )
+        sr.last_failure_alert_at = maintenant
+
+
+@router.post("/session/{tracker_name}", response_model=ScrapeStatus)
+async def deposer_session(
+    tracker_name: str,
+    request: Request,
+    user: TokenData = Depends(get_current_user),
+):
+    """
+    Depose la session d'un tracker a connexion manuelle (C411, Ygg) : corps {"valeur": "..."},
+    valeur du cookie de session copiee depuis le navigateur ou l'utilisateur s'est connecte
+    lui-meme. Ecrit le fichier de cookies puis lance un releve de controle.
+    La valeur n'est ni journalisee ni renvoyee (corps lu a la main : une erreur de
+    validation automatique recopierait l'entree dans la reponse).
+    """
+    scraper = get_scraper(tracker_name)
+    if not scraper or not scraper.SESSION_COOKIE:
+        raise HTTPException(status_code=404, detail=f"Tracker '{tracker_name}' sans session manuelle")
+
+    try:
+        corps = await request.json()
+    except Exception:
+        corps = None
+    valeur = nettoyer_valeur_cookie(
+        corps.get("valeur") if isinstance(corps, dict) else None, scraper.SESSION_COOKIE["name"])
+    if valeur is None:
+        raise HTTPException(status_code=400, detail="Valeur de cookie vide ou mal formee")
+    if _scraping_in_progress:
+        raise HTTPException(status_code=409, detail="Un releve est en cours, reessayer dans une minute")
+
+    try:
+        scraper.deposer_session(valeur)
+    except OSError:
+        raise HTTPException(status_code=500, detail="Ecriture du fichier de session impossible")
+    logger.info("[%s] Session deposee a la main (valeur non journalisee)", tracker_name)
+
+    if tracker_name not in _scrape_results:
+        _scrape_results[tracker_name] = ScrapeResult(tracker_name=tracker_name, status="ok")
+    sr = _scrape_results[tracker_name]
+    sr.session_deposited_at = datetime.now(timezone.utc)
+    sr.session_expiry_alert_at = None
+
+    # Releve de controle (quelques secondes) : la reponse dit si le site accepte la session.
+    await run_scraping_task(tracker_name=tracker_name)
+    if sr.status == "ok":
+        return ScrapeStatus(status="ok", message="Session acceptee, releve reussi", tracker=tracker_name)
+    sr.session_deposited_at = None
+    await _persist_scraper_state(tracker_name)
+    return ScrapeStatus(
+        status="refusee",
+        message=f"Session refusee par le site ({sr.last_error or 'erreur inconnue'})",
+        tracker=tracker_name,
+    )
+
+
 def _detect_parser_suspect(stats) -> tuple[bool, str]:
     """
     Heuristique : si points_bonus > 0 (page /tokens a repondu) mais que des champs
@@ -248,6 +367,7 @@ async def _scrape_single(name: str, scraper, browser) -> None:
 
             # Notification: recovery apres echecs
             await notify_scrape_recovery(name, prev_failures)
+            _scrape_results[name].last_failure_alert_at = None
 
             # Notification: ratio sous 0.85
             ratio_val = None
@@ -267,12 +387,26 @@ async def _scrape_single(name: str, scraper, browser) -> None:
                     warnings_val = int(stats.warnings_active.split()[0])
                 except (ValueError, IndexError):
                     pass
+            # Une alerte quand le compteur augmente (@here a partir de 2), puis un rappel
+            # sans @here par 24 h tant qu'il reste 2 avertissements ou plus.
             prev_warnings = _scrape_results[name].last_known_active_warnings
-            if warnings_val > prev_warnings:
-                await notify_hit_and_run(name, warnings_val)
-            if warnings_val >= 2:
-                await notify_hit_and_run_critical(name, warnings_val)
+            decision = decider_alerte_avertissements(
+                warnings_val, prev_warnings, _scrape_results[name].last_warning_alert_at, now)
+            if decision:
+                detail = (stats.raw_data or {}).get("avertissements_detail") if isinstance(stats.raw_data, dict) else None
+                await notify_avertissements(name, warnings_val, decision, detail)
+                _scrape_results[name].last_warning_alert_at = now
+            if warnings_val == 0:
+                _scrape_results[name].last_warning_alert_at = None
             _scrape_results[name].last_known_active_warnings = warnings_val
+
+            # Session manuelle a duree limitee : rappel avant l'echeance (une fois par session).
+            if scraper.SESSION_COOKIE:
+                sr = _scrape_results[name]
+                expiration = scraper.expiration_session(sr.session_deposited_at)
+                if session_bientot_expiree(expiration, sr.session_expiry_alert_at, now):
+                    await notify_session_bientot_expiree(name, expiration, _reconnexion(scraper))
+                    sr.session_expiry_alert_at = now
 
             # Notification: parser suspect (tokens OK mais champs stats vides)
             suspect, suspect_reason = _detect_parser_suspect(stats)
@@ -290,14 +424,14 @@ async def _scrape_single(name: str, scraper, browser) -> None:
             _scrape_results[name].last_error = reason
             _scrape_results[name].consecutive_failures += 1
             logger.warning("Skippe: %s (%s)", name, reason)
-            await notify_scrape_failures(name, _scrape_results[name].consecutive_failures, reason)
+            await _signaler_echec(name, scraper, reason, now)
 
     except Exception as e:
         _scrape_results[name].status = "error"
         _scrape_results[name].last_error = str(e)
         _scrape_results[name].consecutive_failures += 1
         logger.error("Erreur %s: %s", name, e)
-        await notify_scrape_failures(name, _scrape_results[name].consecutive_failures, str(e))
+        await _signaler_echec(name, scraper, str(e), now)
 
     # Persister l'etat (compteurs) pour survivre aux restart du container.
     await _persist_scraper_state(name)

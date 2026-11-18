@@ -4,7 +4,9 @@ Classe de base abstraite pour tous les scrapers de trackers.
 import json
 import logging
 import os
+import time
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
@@ -59,6 +61,11 @@ class BaseScraper(ABC):
     Chaque tracker herite de cette classe et implemente ses specificites.
     """
 
+    # Trackers a session manuelle (captcha a la connexion : C411, Ygg) : cookie de session
+    # que l'utilisateur depose depuis son navigateur. {"name", "domain", "duree_jours", "fixe"} ;
+    # « fixe » = la duree court depuis la connexion, les releves ne la prolongent pas.
+    SESSION_COOKIE: Optional[dict] = None
+
     def __init__(self, config: ScraperConfig):
         self.config = config
         self.name = config.name
@@ -100,6 +107,61 @@ class BaseScraper(ABC):
         """Chemin du fichier cookies pour ce tracker."""
         safe_name = re.sub(r'[^a-zA-Z0-9]', '_', self.name).lower()
         return COOKIES_DIR / f"{safe_name}.json"
+
+    def deposer_session(self, valeur: str) -> None:
+        """
+        Ecrit le cookie de session au format storage_state de Playwright. Les autres cookies
+        deja enregistres (cf_clearance...) sont gardes. La valeur n'est jamais journalisee.
+        """
+        modele = self.SESSION_COOKIE
+        if not modele:
+            raise ValueError("ce tracker n'a pas de session manuelle")
+        chemin = self._cookies_path()
+        etat = {"cookies": [], "origins": []}
+        if chemin.exists():
+            try:
+                ancien = json.loads(chemin.read_text())
+                etat["cookies"] = [c for c in ancien.get("cookies", []) if c.get("name") != modele["name"]]
+                etat["origins"] = ancien.get("origins", [])
+            except (OSError, ValueError):
+                pass
+        etat["cookies"].append({
+            "name": modele["name"],
+            "value": valeur,
+            "domain": modele["domain"],
+            "path": "/",
+            "expires": int(time.time()) + int(modele.get("duree_jours", 7)) * 86400,
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "Lax",
+        })
+        COOKIES_DIR.mkdir(parents=True, exist_ok=True)
+        provisoire = chemin.with_suffix(".json.tmp")
+        descripteur = os.open(provisoire, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descripteur, "w") as f:
+            json.dump(etat, f)
+        os.replace(provisoire, chemin)
+
+    def expiration_session(self, deposee_le: Optional[datetime] = None) -> Optional[datetime]:
+        """
+        Expiration prevue de la session manuelle : celle du cookie enregistre et, si la duree
+        est fixe, la date de depot plus cette duree (la plus proche des deux). None si inconnue.
+        """
+        modele = self.SESSION_COOKIE
+        if not modele:
+            return None
+        candidates = []
+        try:
+            for c in json.loads(self._cookies_path().read_text()).get("cookies", []):
+                if c.get("name") == modele["name"] and (c.get("expires") or -1) > 0:
+                    candidates.append(datetime.fromtimestamp(c["expires"], tz=timezone.utc))
+        except (OSError, ValueError):
+            return None
+        if modele.get("fixe") and deposee_le is not None:
+            if deposee_le.tzinfo is None:
+                deposee_le = deposee_le.replace(tzinfo=timezone.utc)
+            candidates.append(deposee_le + timedelta(days=int(modele.get("duree_jours", 7))))
+        return min(candidates) if candidates else None
 
     async def _save_cookies(self, context: BrowserContext) -> None:
         """Sauvegarde les cookies du context pour reutilisation."""

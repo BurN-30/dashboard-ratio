@@ -137,6 +137,12 @@ class ScraperState(Base):
     consecutive_failures = Column(Integer, default=0, nullable=False)
     last_success_at = Column(DateTime(timezone=True), nullable=True)
     last_known_active_warnings = Column(Integer, default=0, nullable=False)
+    # Anti-repetition des alertes Discord (une alerte, puis un rappel par 24 h).
+    last_failure_alert_at = Column(DateTime(timezone=True), nullable=True)
+    last_warning_alert_at = Column(DateTime(timezone=True), nullable=True)
+    # Session manuelle (C411, Ygg) : date du depot et rappel d'expiration deja envoye.
+    session_deposited_at = Column(DateTime(timezone=True), nullable=True)
+    session_expiry_alert_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(
         DateTime(timezone=True),
         default=_utc_now,

@@ -57,6 +57,10 @@ class Settings(BaseSettings):
         default=None,
         description="URL du webhook Discord pour les alertes"
     )
+    trackboard_url: Optional[str] = Field(
+        default=None,
+        description="URL de l'interface TrackBoard, pour les liens des alertes (facultatif)"
+    )
 
     # Scraper
     scrape_interval: int = Field(

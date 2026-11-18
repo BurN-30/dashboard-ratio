@@ -21,6 +21,15 @@ TIERS_FILE = "/app/cookies/bonus_tiers.json" if os.path.isdir("/app") else "cook
 _UNIT3D = re.compile(r"(\d+(?:[.,]\d+)?)\s*(GiB|TiB)\s+Upload\s+(\d[\d\s  ,.]*)")
 
 
+# « Rachat d'un H&R<tab>100 000 » (G3MINI), « Supprimer un H&R<tab>5000 » (TOS)
+_RACHAT_HNR = re.compile(r"^(.*(?:H\s*&\s*R|Hit\s*(?:and|&)\s*Run).*?)\t\s*(\d[\d\s\u00a0\u202f,.]*)", re.I)
+
+
+def url_boutique_unit3d(profil_url: str) -> str:
+    """URL du profil UNIT3D (/users/{u}) -> URL de la boutique de bonus."""
+    return profil_url.rstrip("/") + "/transactions/create"
+
+
 def _entier(texte: str) -> Optional[int]:
     chiffres = re.sub(r"[^\d]", "", texte)
     return int(chiffres) if chiffres else None
@@ -39,6 +48,21 @@ def parse_paliers_unit3d(body: str) -> list[dict]:
         if cout:
             paliers.append({"gib": gib, "cost": cout})
     return paliers
+
+
+def parse_rachat_hnr(body: str) -> Optional[dict]:
+    """
+    Texte de /users/{u}/transactions/create -> article de rachat d'un hit and run
+    {"libelle", "cost"}, ou None si la boutique n'en vend pas (GF-FREE au 18/11/2026).
+    """
+    for ligne in body.split("\n"):
+        m = _RACHAT_HNR.search(ligne.strip("\r"))
+        if not m:
+            continue
+        cout = _entier(m.group(2))
+        if cout:
+            return {"libelle": " ".join(m.group(1).split()), "cost": cout}
+    return None
 
 
 def paliers_tr4ker(items: Iterable[dict]) -> list[dict]:
