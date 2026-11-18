@@ -1,0 +1,5 @@
+# Session Sync Requirements
+python-dotenv==1.0.1
+# Mode --navigateur seulement. Avec SESSION_SYNC_CANAL=msedge (défaut), le navigateur déjà
+# installé sur Windows est utilisé : pas de « playwright install ».
+playwright>=1.43,<2

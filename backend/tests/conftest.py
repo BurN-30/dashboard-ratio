@@ -16,6 +16,7 @@ os.environ.update({
     "JWT_SECRET": "test-secret-key-for-unit-tests-minimum-32-characters",
     "ADMIN_PASSWORD": "testpass",
     "HW_AGENT_TOKEN": "test-hw-token",
+    "SESSION_SYNC_TOKEN": "test-session-sync-token-0123456789abcdef",
     "SCRAPE_INTERVAL": "0",  # Desactiver le scheduler en test
     "DOMAIN": "test.local",
 })

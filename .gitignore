@@ -7,6 +7,9 @@ contexte.md
 fiche-memo.md
 backend/.env
 hw-agent/.env
+session-sync/.env
+session-sync/venv/
+session-sync/logs/
 frontend/.env.local
 
 # Claude Code

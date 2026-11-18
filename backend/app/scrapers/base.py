@@ -135,6 +135,39 @@ class BaseScraper(ABC):
             "secure": True,
             "sameSite": "Lax",
         })
+        self._ecrire_etat(etat)
+
+    def deposer_storage_state(self, etat: dict) -> None:
+        """
+        Écrit un storage_state complet de Playwright, déjà validé par la route de dépôt
+        (cookies du site seulement, cookie de session présent). Ses cookies remplacent ceux
+        de même (nom, domaine, chemin) et l'ancien cookie de session ; les autres cookies
+        déjà enregistrés sont gardés, comme les origines absentes du nouvel état.
+        Aucune valeur n'est journalisée.
+        """
+        modele = self.SESSION_COOKIE
+        if not modele:
+            raise ValueError("ce tracker n'a pas de session manuelle")
+        cle = lambda c: (c.get("name"), str(c.get("domain", "")).lstrip("."), c.get("path", "/"))
+        nouveaux = {cle(c) for c in etat["cookies"]}
+        origines = {o["origin"] for o in etat.get("origins", [])}
+        cookies, origins = [], []
+        chemin = self._cookies_path()
+        if chemin.exists():
+            try:
+                ancien = json.loads(chemin.read_text())
+                cookies = [c for c in ancien.get("cookies", [])
+                           if isinstance(c, dict) and c.get("name") != modele["name"] and cle(c) not in nouveaux]
+                origins = [o for o in ancien.get("origins", [])
+                           if isinstance(o, dict) and o.get("origin") not in origines]
+            except (OSError, ValueError, AttributeError):
+                pass
+        self._ecrire_etat({"cookies": cookies + list(etat["cookies"]),
+                           "origins": origins + list(etat.get("origins", []))})
+
+    def _ecrire_etat(self, etat: dict) -> None:
+        """Écriture atomique du fichier de cookies, lisible par le seul propriétaire."""
+        chemin = self._cookies_path()
         COOKIES_DIR.mkdir(parents=True, exist_ok=True)
         provisoire = chemin.with_suffix(".json.tmp")
         descripteur = os.open(provisoire, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -166,9 +199,9 @@ class BaseScraper(ABC):
     async def _save_cookies(self, context: BrowserContext) -> None:
         """Sauvegarde les cookies du context pour reutilisation."""
         try:
-            COOKIES_DIR.mkdir(parents=True, exist_ok=True)
-            state = await context.storage_state()
-            self._cookies_path().write_text(json.dumps(state))
+            # État complet du contexte (tous les cookies, pas seulement celui de session),
+            # écrit d'un bloc : un arrêt en cours d'écriture ne laisse pas de fichier tronque.
+            self._ecrire_etat(await context.storage_state())
             logger.info("[%s] Cookies sauvegardes", self.name)
         except Exception as e:
             logger.warning("[%s] Impossible de sauvegarder les cookies: %s", self.name, e)

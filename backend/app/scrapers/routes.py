@@ -3,6 +3,7 @@ Routes API pour les scrapers.
 """
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -15,7 +16,7 @@ from playwright.async_api import async_playwright
 
 logger = logging.getLogger("dashboard.scraper")
 
-from app.auth.jwt import get_current_user, TokenData
+from app.auth.jwt import get_current_user, get_session_depositor, TokenData
 from app.db.database import async_session
 from app.db.models import TrackerStats, ScraperState
 from app.scrapers.registry import (
@@ -252,6 +253,110 @@ def nettoyer_valeur_cookie(valeur, nom: str) -> Optional[str]:
     return valeur
 
 
+# Bornes d'un storage_state déposé (un état de navigateur complet reste très en dessous).
+MAX_COOKIES_RECUS = 500
+MAX_COOKIES_GARDES = 60
+MAX_ENTREES_LOCALSTORAGE = 200
+MAX_TAILLE_LOCALSTORAGE = 200_000
+
+
+def _cookie_cloudflare(nom: str) -> bool:
+    """
+    Cookies de Cloudflare (cf_clearance, __cf_bm...) : liés à la machine et au navigateur qui
+    ont passé le défi. Jamais importés d'un autre poste : ce serait rejouer ailleurs un défi
+    passé, et ils écraseraient ceux que le collecteur a obtenus lui-même.
+    """
+    nom = nom.lower()
+    return nom.startswith(("cf_", "__cf", "_cf"))
+
+
+def _domaine_du_site(modele: dict) -> str:
+    domaine = modele["domain"].lstrip(".").lower()
+    return domaine[4:] if domaine.startswith("www.") else domaine
+
+
+def _dans_le_site(hote, site: str) -> bool:
+    if not isinstance(hote, str):
+        return False
+    hote = hote.lstrip(".").lower()
+    return hote == site or hote.endswith("." + site)
+
+
+def _texte_de_cookie(v, maxi: int, interdits: str, mini: int = 0) -> bool:
+    return (isinstance(v, str) and mini <= len(v) <= maxi
+            and not any(c in interdits or not 0x20 <= ord(c) <= 0x7E for c in v))
+
+
+def nettoyer_storage_state(etat, modele: dict, maintenant: Optional[float] = None) -> Optional[dict]:
+    """
+    storage_state de Playwright reçu du poste de l'utilisateur -> état à écrire, ou None s'il
+    est inutilisable. Garde les cookies du site (domaine du tracker et sous-domaines), donc
+    les éventuels cookies secondaires de longue durée, et le localStorage de ses origines ;
+    écarte les autres domaines, les cookies Cloudflare et tout cookie mal formé.
+    Exige exactement un cookie de session, valide et non expiré, remis au gabarit du
+    tracker (hôte, chemin /, Secure). Rien de ce qui est reçu n'est journalisé ni renvoyé.
+    """
+    if not isinstance(etat, dict):
+        return None
+    recus = etat.get("cookies")
+    if not isinstance(recus, list) or len(recus) > MAX_COOKIES_RECUS:
+        return None
+    maintenant = time.time() if maintenant is None else maintenant
+    site = _domaine_du_site(modele)
+    session, cookies, vus = None, [], set()
+    for c in recus:
+        if not isinstance(c, dict) or not _dans_le_site(c.get("domain"), site):
+            continue
+        nom = c.get("name")
+        if not _texte_de_cookie(nom, 256, ' "=;,\\', mini=1) or _cookie_cloudflare(nom):
+            continue
+        expire = c.get("expires")
+        if isinstance(expire, bool) or not isinstance(expire, (int, float)) or expire <= 0:
+            expire = -1  # cookie de session du navigateur
+        if nom == modele["name"]:
+            valeur = nettoyer_valeur_cookie(c.get("value"), nom)
+            if valeur is None or session is not None or 0 < expire <= maintenant:
+                return None
+            if expire == -1:
+                expire = int(maintenant) + int(modele.get("duree_jours", 7)) * 86400
+            session = {"name": nom, "value": valeur, "domain": modele["domain"], "path": "/",
+                       "expires": expire, "httpOnly": True, "secure": True,
+                       "sameSite": c.get("sameSite") if c.get("sameSite") in ("Strict", "Lax", "None") else "Lax"}
+            continue
+        if 0 < expire <= maintenant or not _texte_de_cookie(c.get("value"), 4096, ";"):
+            continue
+        chemin = c.get("path")
+        if not (_texte_de_cookie(chemin, 1024, ";", mini=1) and chemin.startswith("/")):
+            chemin = "/"
+        cle = (nom, c["domain"].lower(), chemin)
+        if cle in vus:
+            continue
+        vus.add(cle)
+        cookies.append({
+            "name": nom, "value": c["value"], "domain": c["domain"].lower(),
+            "path": chemin, "expires": expire, "httpOnly": c.get("httpOnly") is True, "secure": c.get("secure") is True,
+            "sameSite": c.get("sameSite") if c.get("sameSite") in ("Strict", "Lax", "None") else "Lax",
+        })
+    if session is None or len(cookies) >= MAX_COOKIES_GARDES:
+        return None
+
+    origins, taille = [], 0
+    recues = etat.get("origins")
+    for o in recues if isinstance(recues, list) else []:
+        if not isinstance(o, dict) or not isinstance(o.get("origin"), str):
+            continue
+        origine = o["origin"]
+        if not origine.startswith("https://") or not _dans_le_site(origine[8:].split(":")[0].split("/")[0], site):
+            continue
+        entrees = [{"name": e["name"], "value": e["value"]} for e in (o.get("localStorage") or [])
+                   if isinstance(e, dict) and isinstance(e.get("name"), str) and isinstance(e.get("value"), str)]
+        taille += sum(len(e["name"]) + len(e["value"]) for e in entrees)
+        if len(entrees) > MAX_ENTREES_LOCALSTORAGE or taille > MAX_TAILLE_LOCALSTORAGE:
+            return None
+        origins.append({"origin": origine, "localStorage": entrees})
+    return {"cookies": cookies + [session], "origins": origins}
+
+
 async def _signaler_echec(name: str, scraper, raison: str, maintenant: datetime) -> None:
     """Alerte d'echec : une au 3e echec consecutif, puis un rappel par 24 h."""
     sr = _scrape_results[name]
@@ -268,13 +373,17 @@ async def _signaler_echec(name: str, scraper, raison: str, maintenant: datetime)
 async def deposer_session(
     tracker_name: str,
     request: Request,
-    user: TokenData = Depends(get_current_user),
+    user: TokenData = Depends(get_session_depositor),
 ):
     """
-    Depose la session d'un tracker a connexion manuelle (C411, Ygg) : corps {"valeur": "..."},
-    valeur du cookie de session copiee depuis le navigateur ou l'utilisateur s'est connecte
-    lui-meme. Ecrit le fichier de cookies puis lance un releve de controle.
-    La valeur n'est ni journalisee ni renvoyee (corps lu a la main : une erreur de
+    Depose la session d'un tracker a connexion manuelle (C411, Ygg), ouverte par l'utilisateur
+    lui-meme dans son navigateur. Deux corps acceptes, jamais les deux a la fois :
+    - {"valeur": "..."} : valeur du cookie de session (ou « nom=valeur ») ;
+    - {"storage_state": {...}} : etat complet de Playwright (context.storage_state()), qui
+      garde aussi les cookies secondaires du site (voir nettoyer_storage_state).
+    Ecrit le fichier de cookies puis lance un releve de controle.
+    Jeton : celui de l'interface, ou SESSION_SYNC_TOKEN (jeton dedie a cette seule route).
+    Rien de ce qui est recu n'est journalise ni renvoye (corps lu a la main : une erreur de
     validation automatique recopierait l'entree dans la reponse).
     """
     scraper = get_scraper(tracker_name)
@@ -285,18 +394,29 @@ async def deposer_session(
         corps = await request.json()
     except Exception:
         corps = None
-    valeur = nettoyer_valeur_cookie(
-        corps.get("valeur") if isinstance(corps, dict) else None, scraper.SESSION_COOKIE["name"])
-    if valeur is None:
-        raise HTTPException(status_code=400, detail="Valeur de cookie vide ou mal formee")
+    if not isinstance(corps, dict):
+        corps = {}
+    if "storage_state" in corps:
+        if "valeur" in corps:
+            raise HTTPException(status_code=400, detail="Fournir « valeur » ou « storage_state », pas les deux")
+        etat = nettoyer_storage_state(corps["storage_state"], scraper.SESSION_COOKIE)
+        if etat is None:
+            raise HTTPException(
+                status_code=400, detail="storage_state mal forme, ou cookie de session absent, invalide ou expire")
+        deposer, forme = (lambda: scraper.deposer_storage_state(etat)), f"storage_state, {len(etat['cookies'])} cookie(s)"
+    else:
+        valeur = nettoyer_valeur_cookie(corps.get("valeur"), scraper.SESSION_COOKIE["name"])
+        if valeur is None:
+            raise HTTPException(status_code=400, detail="Valeur de cookie vide ou mal formee")
+        deposer, forme = (lambda: scraper.deposer_session(valeur)), "cookie seul"
     if _scraping_in_progress:
         raise HTTPException(status_code=409, detail="Un releve est en cours, reessayer dans une minute")
 
     try:
-        scraper.deposer_session(valeur)
+        deposer()
     except OSError:
         raise HTTPException(status_code=500, detail="Ecriture du fichier de session impossible")
-    logger.info("[%s] Session deposee a la main (valeur non journalisee)", tracker_name)
+    logger.info("[%s] Session deposee a la main par %s (%s, valeurs non journalisees)", tracker_name, user.sub, forme)
 
     if tracker_name not in _scrape_results:
         _scrape_results[tracker_name] = ScrapeResult(tracker_name=tracker_name, status="ok")

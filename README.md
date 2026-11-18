@@ -98,6 +98,7 @@ Variables critiques :
 | `JWT_SECRET` | Clé JWT (générer avec `openssl rand -hex 32`) |
 | `ADMIN_PASSWORD` | Mot de passe admin du dashboard |
 | `HW_AGENT_TOKEN` | Token de l'agent hardware (`openssl rand -hex 16`) |
+| `SESSION_SYNC_TOKEN` | Facultatif : jeton du poste qui renouvelle la session C411 (`openssl rand -hex 32`), accepté sur `POST /scrapers/session/{tracker}` seulement |
 | `DATABASE_URL` | URL PostgreSQL (cohérente avec POSTGRES_*) |
 | `POSTGRES_PASSWORD` | Mot de passe Postgres |
 | `TRACKER_USERNAME` | Pseudo affiché dans les liens shop bonus |
@@ -217,9 +218,9 @@ La connexion de ces deux sites passe par un captcha : TrackBoard ne s'y connecte
 2. F12, onglet Application (Chrome) ou Stockage (Firefox), Cookies : copier la valeur du cookie de session (`__Host-c411_session` pour C411, `__ygg_sess` pour Ygg).
 3. Dans TrackBoard, carte du tracker, « Reconnecter » (ou « Renouveler la session ») : coller la valeur, valider.
 
-Le backend (`POST /scrapers/session/{tracker}`, jeton requis, corps `{"valeur": "..."}`) écrit le fichier de cookies au format `storage_state` de Playwright et lance un relevé de contrôle ; la réponse dit si le site accepte la session. La valeur n'est ni journalisée ni renvoyée.
+Le backend (`POST /scrapers/session/{tracker}`, jeton de l'interface ou `SESSION_SYNC_TOKEN`) accepte deux corps : `{"valeur": "..."}` (le cookie de session seul) ou `{"storage_state": {...}}` (l'état complet rendu par `context.storage_state()` de Playwright, qui garde aussi les cookies secondaires du site ; les autres domaines et les cookies de Cloudflare sont écartés). Il écrit le fichier de cookies au format `storage_state` de Playwright et lance un relevé de contrôle ; la réponse dit si le site accepte la session. La valeur n'est ni journalisée ni renvoyée.
 
-La session C411 dure 7 jours fixes : un rappel Discord part au premier relevé à moins de 36 h de l'échéance. Celle d'Ygg est prolongée par le site à chaque relevé.
+La session C411 dure 7 jours fixes : un rappel Discord part au premier relevé à moins de 36 h de l'échéance. Pour ne plus copier le cookie à la main, [`session-sync/`](session-sync/README.md) installe sur le PC Windows une tâche planifiée (compte utilisateur, sans privilège) qui ouvre la page de connexion tous les 6 jours et dépose le `storage_state` une fois la connexion faite à la main ; le captcha n'est jamais contourné. Celle d'Ygg est prolongée par le site à chaque relevé.
 
 ### 7. Alertes Discord
 
@@ -292,9 +293,13 @@ trackboard/
 ├── hw-agent/                   # Agent hardware (PC local)
 │   ├── agent.py                # psutil + nvidia-smi + LHM WMI
 │   └── requirements.txt
+├── session-sync/               # Dépôt de la session C411 depuis le PC local
+│   ├── session_sync.py         # storage_state ou cookie -> POST /scrapers/session
+│   └── README.md
 ├── scripts/                    # Outillage operationnel
 │   ├── diagnose.sh                  # Diag complet du VPS (SSH)
 │   ├── install-hw-agent-task.ps1    # Auto-start hw-agent en Task Scheduler Win
+│   ├── install-session-sync-task.ps1 # Tâche session-sync (compte utilisateur, sans privilège)
 │   └── fix-cloudflare-tunnel.ps1    # Repare cloudflared service config path
 ├── docker-compose.yml          # Production (DB + back + front)
 ├── docker-compose.dev.yml      # Dev local (DB + back hot reload)
@@ -309,6 +314,7 @@ trackboard/
 - Rate limiting sur `/auth/login` (5 tentatives/min/IP)
 - Conteneurs DB/back/front exposés uniquement sur `127.0.0.1` (le reverse proxy host fait la passerelle publique)
 - Agent hardware authentifié par token séparé
+- Dépôt de session depuis un autre poste : jeton dédié `SESSION_SYNC_TOKEN`, refusé partout ailleurs que sur `POST /scrapers/session/{tracker}`
 - CORS configuré par domaine (pas de wildcard)
 - Aucun secret dans le code source (tout via `.env`, déjà gitignored)
 - `/health` public minimal, `/health/full` derrière auth pour les détails techniques

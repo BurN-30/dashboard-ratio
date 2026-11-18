@@ -5,6 +5,9 @@ Notes :
 - Connexion protegee par un captcha Cloudflare (Turnstile) : jamais de connexion
   automatique. Le scraper reutilise la session ouverte a la main par l'utilisateur
   (cookies/c411.json, cookie __Host-c411_session), rafraichie a chaque releve.
+  Le fichier est un storage_state complet de Playwright : depose par POST /scrapers/session
+  (cookie seul, ou etat complet avec les cookies secondaires du site), il est charge et
+  reecrit en entier, sans tri des cookies.
 - Donnees lues par l'API JSON du site (03/11/2026) :
   GET /api/auth/me        -> user.uploaded, downloaded, uploadCredit, ratio, warnings, ratioWarning
   GET /api/tokens/balance -> balance (Zen)
@@ -133,7 +136,16 @@ class C411Scraper(BaseScraper):
         chemin = self._cookies_path()
         if not chemin.exists():
             return ScrapedStats(tracker_name=self.name, raw_data={"error": "session_absente_reconnexion_manuelle"})
-        context = await browser.new_context(storage_state=str(chemin))
+        # storage_state complet (cookie de session et cookies secondaires du site, localStorage) :
+        # chargé tel quel dans le contexte, puis réécrit en entier après un relevé réussi.
+        try:
+            etat = json.loads(chemin.read_text())
+            if not isinstance(etat, dict) or not isinstance(etat.get("cookies"), list):
+                raise ValueError("storage_state sans liste de cookies")
+        except (OSError, ValueError) as e:
+            logger.error("[%s] Fichier de session illisible (%s)", self.name, type(e).__name__)
+            return ScrapedStats(tracker_name=self.name, raw_data={"error": "session_illisible_reconnexion_manuelle"})
+        context = await browser.new_context(storage_state=etat)
         page = await context.new_page()
         try:
             stats = await self.scrape(page)

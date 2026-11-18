@@ -3,7 +3,7 @@ Configuration centralisee via Pydantic Settings.
 Charge automatiquement depuis les variables d'environnement.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional
 from functools import lru_cache
 
@@ -51,6 +51,20 @@ class Settings(BaseSettings):
         default="change-me",
         description="Token pour authentifier l'agent hardware"
     )
+
+    # Session Sync : jeton du poste qui depose la session d'un tracker a connexion manuelle.
+    # Accepte sur POST /scrapers/session/{tracker} seulement ; vide = jeton desactive.
+    session_sync_token: Optional[str] = Field(
+        default=None,
+        min_length=32,
+        description="Jeton dedie au depot de session (openssl rand -hex 32)"
+    )
+
+    @field_validator("session_sync_token", mode="before")
+    @classmethod
+    def _jeton_vide(cls, v):
+        # Le compose transmet une chaine vide quand la variable n'est pas definie.
+        return v.strip() or None if isinstance(v, str) else v
 
     # Notifications
     discord_webhook_url: Optional[str] = Field(

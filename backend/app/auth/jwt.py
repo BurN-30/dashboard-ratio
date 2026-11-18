@@ -1,6 +1,7 @@
 """
 Gestion des JWT (JSON Web Tokens) pour l'authentification.
 """
+import hmac
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
@@ -117,4 +118,24 @@ async def get_current_user(
         async def protected_route(user: TokenData = Depends(get_current_user)):
             return {"user": user.sub}
     """
+    return verify_token(credentials.credentials)
+
+
+SUJET_SESSION_SYNC = "session-sync"
+
+
+async def get_session_depositor(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> TokenData:
+    """
+    Dependency de la seule route de depot de session (POST /scrapers/session/{tracker}) :
+    accepte le jeton Bearer de l'interface, ou le jeton dedie SESSION_SYNC_TOKEN du poste
+    qui renouvelle la session. Ce jeton dedie n'est pas un JWT : toute autre route passe
+    par get_current_user, qui le refuse. Sans SESSION_SYNC_TOKEN configure, seul le JWT vaut.
+    """
+    attendu = get_settings().session_sync_token
+    # Comparaison a temps constant (jeton recu du reseau)
+    if attendu and hmac.compare_digest(credentials.credentials.encode(), attendu.encode()):
+        maintenant = datetime.now(timezone.utc)
+        return TokenData(sub=SUJET_SESSION_SYNC, exp=maintenant, iat=maintenant)
     return verify_token(credentials.credentials)

@@ -32,7 +32,8 @@ RAPPEL_APRES = timedelta(hours=23, minutes=30)
 # (relevés à 8 h, 14 h et 20 h : le rappel tombe entre 24 h et 36 h avant).
 PREAVIS_SESSION = timedelta(hours=36)
 
-ERREURS_SESSION = ("session_absente_reconnexion_manuelle", "session_expiree_reconnexion_manuelle")
+ERREURS_SESSION = ("session_absente_reconnexion_manuelle", "session_expiree_reconnexion_manuelle",
+                   "session_illisible_reconnexion_manuelle")
 
 ROUGE, ORANGE, VERT = 0xFF4444, 0xFF8800, 0x44BB44
 
