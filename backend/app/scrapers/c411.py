@@ -101,8 +101,11 @@ class C411Scraper(BaseScraper):
     """C411 : API JSON avec la session de l'utilisateur (jamais de connexion automatique)."""
 
     # Session de 7 jours fixes (ouverte le 03/11/2026, expiree le 10/11 malgre un releve
-    # reussi trois fois par jour) : rappel Discord avant l'echeance, depot par POST /scrapers/session.
-    SESSION_COOKIE = {"name": "__Host-c411_session", "domain": "c411.org", "duree_jours": 7, "fixe": True}
+    # reussi trois fois par jour) : alerte Discord si le renouvellement automatique n'a pas eu
+    # lieu, depot par POST /scrapers/session. Le fragment #trackboard du lien de reconnexion
+    # declenche le script utilisateur (outils/trackboard-c411.user.js), qui depose la session.
+    SESSION_COOKIE = {"name": "__Host-c411_session", "domain": "c411.org", "duree_jours": 7, "fixe": True,
+                      "lien_reconnexion": "https://c411.org/login#trackboard"}
 
     async def login(self, page: Page) -> bool:
         return False  # captcha a la connexion : jamais automatique

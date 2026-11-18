@@ -230,6 +230,7 @@ def _reconnexion(scraper) -> Optional[dict]:
     return {
         "login_url": scraper.config.login_url,
         "cookie": scraper.SESSION_COOKIE["name"],
+        "lien_reconnexion": scraper.SESSION_COOKIE.get("lien_reconnexion"),
         "trackboard_url": get_settings().trackboard_url,
     }
 
@@ -382,7 +383,8 @@ async def deposer_session(
     - {"storage_state": {...}} : etat complet de Playwright (context.storage_state()), qui
       garde aussi les cookies secondaires du site (voir nettoyer_storage_state).
     Ecrit le fichier de cookies puis lance un releve de controle.
-    Jeton : celui de l'interface, ou SESSION_SYNC_TOKEN (jeton dedie a cette seule route).
+    Jeton : celui de l'interface, ou SESSION_SYNC_TOKEN (jeton dedie a cette seule route),
+    ou en-tete X-Depot-Cle egal a SESSION_DEPOT_CLE (cle dediee a cette seule route).
     Rien de ce qui est recu n'est journalise ni renvoye (corps lu a la main : une erreur de
     validation automatique recopierait l'entree dans la reponse).
     """
@@ -520,12 +522,13 @@ async def _scrape_single(name: str, scraper, browser) -> None:
                 _scrape_results[name].last_warning_alert_at = None
             _scrape_results[name].last_known_active_warnings = warnings_val
 
-            # Session manuelle a duree limitee : rappel avant l'echeance (une fois par session).
+            # Session manuelle a duree limitee : alerte quand l'echeance approche sans que la
+            # session ait ete renouvelee (une fois par session deposee).
             if scraper.SESSION_COOKIE:
                 sr = _scrape_results[name]
                 expiration = scraper.expiration_session(sr.session_deposited_at)
                 if session_bientot_expiree(expiration, sr.session_expiry_alert_at, now):
-                    await notify_session_bientot_expiree(name, expiration, _reconnexion(scraper))
+                    await notify_session_bientot_expiree(name, expiration, _reconnexion(scraper), now)
                     sr.session_expiry_alert_at = now
 
             # Notification: parser suspect (tokens OK mais champs stats vides)

@@ -60,11 +60,28 @@ class Settings(BaseSettings):
         description="Jeton dedie au depot de session (openssl rand -hex 32)"
     )
 
-    @field_validator("session_sync_token", mode="before")
+    # Cle de depot : en-tete X-Depot-Cle du script utilisateur (outils/trackboard-c411.user.js).
+    # Acceptee sur POST /scrapers/session/{tracker} seulement ; vide = mode desactive.
+    session_depot_cle: Optional[str] = Field(
+        default=None,
+        min_length=32,
+        description="Cle dediee au depot de session par en-tete X-Depot-Cle (openssl rand -hex 32)"
+    )
+
+    @field_validator("session_sync_token", "session_depot_cle", mode="before")
     @classmethod
     def _jeton_vide(cls, v):
         # Le compose transmet une chaine vide quand la variable n'est pas definie.
         return v.strip() or None if isinstance(v, str) else v
+
+    # Session manuelle : l'alerte Discord part quand il reste moins de ce nombre d'heures
+    # avant l'expiration prevue (le renouvellement automatique aurait deja du avoir lieu).
+    session_alerte_heures: float = Field(default=24, gt=0)
+
+    @field_validator("session_alerte_heures", mode="before")
+    @classmethod
+    def _seuil_vide(cls, v):
+        return 24 if isinstance(v, str) and not v.strip() else v
 
     # Notifications
     discord_webhook_url: Optional[str] = Field(

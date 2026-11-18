@@ -17,6 +17,8 @@ os.environ.update({
     "ADMIN_PASSWORD": "testpass",
     "HW_AGENT_TOKEN": "test-hw-token",
     "SESSION_SYNC_TOKEN": "test-session-sync-token-0123456789abcdef",
+    "SESSION_DEPOT_CLE": "test-cle-de-depot-0123456789abcdef-xyz",
+    "SESSION_ALERTE_HEURES": "24",
     "SCRAPE_INTERVAL": "0",  # Desactiver le scheduler en test
     "DOMAIN": "test.local",
 })

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -122,20 +122,40 @@ async def get_current_user(
 
 
 SUJET_SESSION_SYNC = "session-sync"
+SUJET_DEPOT_CLE = "depot-cle"
+ENTETE_DEPOT_CLE = "X-Depot-Cle"
+
+# Sur la route de depot, l'absence de Bearer n'est pas une erreur en soi : la cle de depot
+# peut suffire. Les deux schemas restent declares dans OpenAPI.
+_bearer_facultatif = HTTPBearer(auto_error=False)
+_cle_de_depot = APIKeyHeader(name=ENTETE_DEPOT_CLE, auto_error=False)
 
 
 async def get_session_depositor(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_facultatif),
+    cle: Optional[str] = Depends(_cle_de_depot),
 ) -> TokenData:
     """
     Dependency de la seule route de depot de session (POST /scrapers/session/{tracker}) :
-    accepte le jeton Bearer de l'interface, ou le jeton dedie SESSION_SYNC_TOKEN du poste
-    qui renouvelle la session. Ce jeton dedie n'est pas un JWT : toute autre route passe
-    par get_current_user, qui le refuse. Sans SESSION_SYNC_TOKEN configure, seul le JWT vaut.
+    accepte le jeton Bearer de l'interface, le jeton dedie SESSION_SYNC_TOKEN du poste qui
+    renouvelle la session, ou l'en-tete X-Depot-Cle egal a SESSION_DEPOT_CLE (script
+    utilisateur). Ni ce jeton ni cette cle ne sont des JWT : toute autre route passe par
+    get_current_user, qui ne lit pas l'en-tete et refuse le jeton. Variable vide ou absente :
+    le mode correspondant est desactive. Aucune valeur recue n'est journalisee.
     """
-    attendu = get_settings().session_sync_token
-    # Comparaison a temps constant (jeton recu du reseau)
+    reglages = get_settings()
+    maintenant = datetime.now(timezone.utc)
+    # Comparaisons a temps constant (valeurs recues du reseau)
+    attendue = reglages.session_depot_cle
+    if attendue and cle and hmac.compare_digest(cle.encode(), attendue.encode()):
+        return TokenData(sub=SUJET_DEPOT_CLE, exp=maintenant, iat=maintenant)
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentification requise",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    attendu = reglages.session_sync_token
     if attendu and hmac.compare_digest(credentials.credentials.encode(), attendu.encode()):
-        maintenant = datetime.now(timezone.utc)
         return TokenData(sub=SUJET_SESSION_SYNC, exp=maintenant, iat=maintenant)
     return verify_token(credentials.credentials)

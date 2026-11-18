@@ -5,7 +5,8 @@ Non-bloquant, ne crash jamais l'app.
 Alertes :
 - Relevé en échec : une alerte au 3e échec consécutif, puis un rappel par 24 h, et le
   rétablissement. Message dédié quand la session manuelle (C411, Ygg) a expiré.
-- Session manuelle : rappel avant l'expiration prévue.
+- Session manuelle : alerte quand il reste moins de SESSION_ALERTE_HEURES (24 h) avant
+  l'expiration prévue, signe que le renouvellement automatique n'a pas eu lieu.
 - Ratio sous 0.85 (@here)
 - Avertissements actifs (H&R en cours, le compteur historique est ignoré) : alerte quand le
   compteur augmente (@here à partir de 2), puis un rappel sans @here par 24 h tant qu'il en
@@ -28,9 +29,17 @@ logger = logging.getLogger("dashboard.notifications")
 # « Un rappel par 24 h » : les relevés tombent à heures fixes, à quelques secondes près ;
 # une marge évite de sauter le relevé du lendemain à la même heure.
 RAPPEL_APRES = timedelta(hours=23, minutes=30)
-# Rappel d'expiration de session : au premier relevé à moins de 36 h de l'échéance
-# (relevés à 8 h, 14 h et 20 h : le rappel tombe entre 24 h et 36 h avant).
-PREAVIS_SESSION = timedelta(hours=36)
+
+
+def preavis_session() -> timedelta:
+    """
+    Seuil de l'alerte d'expiration de session (SESSION_ALERTE_HEURES, 24 h par défaut). La
+    session est renouvelée par un script extérieur environ 48 h avant l'échéance : passer
+    sous ce seuil veut dire que le renouvellement a échoué. L'alerte part au premier relevé
+    réussi sous le seuil (relevés à 8 h, 14 h et 20 h).
+    """
+    return timedelta(hours=get_settings().session_alerte_heures)
+
 
 ERREURS_SESSION = ("session_absente_reconnexion_manuelle", "session_expiree_reconnexion_manuelle",
                    "session_illisible_reconnexion_manuelle")
@@ -104,9 +113,9 @@ def decider_alerte_echec(consecutifs: int, derniere_alerte: Optional[datetime],
 def embed_echec(tracker_name: str, consecutifs: int, erreur: Optional[str], rappel: bool = False,
                 reconnexion: Optional[dict] = None) -> dict:
     """
-    Alerte d'échec. `reconnexion` ({"login_url", "cookie", "trackboard_url"}) accompagne les
-    trackers à session manuelle : quand l'erreur est une session expirée, le message dit
-    quoi faire au lieu d'afficher le code d'erreur.
+    Alerte d'échec. `reconnexion` ({"login_url", "cookie", "trackboard_url"} et, facultatif,
+    "lien_reconnexion") accompagne les trackers à session manuelle : quand l'erreur est une
+    session expirée, le message dit quoi faire au lieu d'afficher le code d'erreur.
     """
     prefixe = "Rappel : " if rappel else ""
     pied = {"text": "Un rappel par 24 h tant que la panne dure, puis un message au rétablissement."}
@@ -115,6 +124,8 @@ def embed_echec(tracker_name: str, consecutifs: int, erreur: Optional[str], rapp
         cookie = reconnexion.get("cookie") or "de session"
         ou = reconnexion.get("trackboard_url")
         trackboard = f"[TrackBoard]({ou})" if ou else "TrackBoard"
+        lien = reconnexion.get("lien_reconnexion")
+        raccourci = f"\n**[Se reconnecter à {tracker_name}]({lien})**" if lien else ""
         etapes = [
             f"1. Se connecter à {reconnexion.get('login_url') or 'au site'} dans le navigateur (captcha compris).",
             f"2. F12, onglet Application (Chrome) ou Stockage (Firefox), Cookies : copier la valeur de `{cookie}`.",
@@ -126,6 +137,7 @@ def embed_echec(tracker_name: str, consecutifs: int, erreur: Optional[str], rapp
                 "La session ouverte à la main n'est plus valable : reconnexion à faire. "
                 "La connexion passe par un captcha, TrackBoard ne la refait jamais seul.\n"
                 f"**{consecutifs}** relevés sans données depuis l'expiration."
+                f"{raccourci}"
             ),
             "color": ROUGE,
             "fields": [{"name": "Marche à suivre", "value": "\n".join(etapes), "inline": False}],
@@ -164,34 +176,64 @@ async def notify_scrape_recovery(tracker_name: str, consecutive_before: int):
 # === SESSION MANUELLE ===
 
 def session_bientot_expiree(expiration: Optional[datetime], deja_prevenu: Optional[datetime],
-                            maintenant: datetime) -> bool:
-    """Vrai une seule fois par session : au premier relevé à moins de 36 h de l'expiration."""
+                            maintenant: datetime, preavis: Optional[timedelta] = None) -> bool:
+    """
+    Vrai une seule fois par session déposée : au premier relevé à moins de `preavis`
+    (SESSION_ALERTE_HEURES par défaut) de l'expiration prévue.
+    """
     if expiration is None or deja_prevenu is not None:
         return False
-    return _utc(expiration) - _utc(maintenant) <= PREAVIS_SESSION
+    return _utc(expiration) - _utc(maintenant) < (preavis_session() if preavis is None else preavis)
 
 
-def embed_session_bientot_expiree(tracker_name: str, expiration: datetime, reconnexion: dict) -> dict:
+def _temps_restant(delai: timedelta) -> str:
+    """« 23 h 30 », « 45 min » ; chaîne vide si l'échéance est passée."""
+    minutes = int(delai.total_seconds() // 60)
+    if minutes <= 0:
+        return ""
+    heures, minutes = divmod(minutes, 60)
+    if heures and minutes:
+        return f"{heures} h {minutes:02d}"
+    return f"{heures} h" if heures else f"{minutes} min"
+
+
+def embed_session_bientot_expiree(tracker_name: str, expiration: datetime, reconnexion: dict,
+                                  maintenant: Optional[datetime] = None) -> dict:
+    """
+    Alerte « le renouvellement automatique n'a pas eu lieu » : temps restant, et lien de
+    reconnexion quand le tracker en déclare un (`reconnexion["lien_reconnexion"]`).
+    """
     from zoneinfo import ZoneInfo
 
-    quand = _utc(expiration).astimezone(ZoneInfo("Europe/Paris")).strftime("%d/%m vers %H h %M")
+    expiration = _utc(expiration)
+    maintenant = _utc(maintenant) or datetime.now(timezone.utc)
+    quand = expiration.astimezone(ZoneInfo("Europe/Paris")).strftime("%d/%m vers %H h %M")
+    restant = _temps_restant(expiration - maintenant)
+    echeance = (f"elle expire dans **{restant}**, le {quand} (heure de Paris)" if restant
+                else f"son échéance prévue, le {quand} (heure de Paris), est dépassée")
     ou = reconnexion.get("trackboard_url")
     trackboard = f"[TrackBoard]({ou})" if ou else "TrackBoard"
+    manuel = (f"copier la valeur du cookie `{reconnexion.get('cookie')}` (F12, Application ou Stockage, "
+              f"Cookies) et la coller dans {trackboard}, carte {tracker_name}, « Reconnecter »")
+    lien = reconnexion.get("lien_reconnexion")
+    if lien:
+        marche = (f"**[Se reconnecter à {tracker_name}]({lien})** : une fois la connexion faite, le script "
+                  f"utilisateur dépose la nouvelle session.\nSans le script : {manuel}.")
+    else:
+        marche = f"Pour ne pas perdre de relevé : se reconnecter au site, puis {manuel}."
     return {
-        "title": f"Session {tracker_name} : expiration le {quand}",
+        "title": f"Session {tracker_name} : renouvellement automatique non effectué",
         "description": (
-            f"La session ouverte à la main arrive à échéance le {quand} (heure de Paris). "
-            "Pour ne pas perdre de relevé : se reconnecter au site, copier la valeur du cookie "
-            f"`{reconnexion.get('cookie')}` (F12, Application ou Stockage, Cookies) et la coller dans "
-            f"{trackboard}, carte {tracker_name}, « Reconnecter »."
+            f"Le renouvellement automatique de la session n'a pas eu lieu : {echeance}.\n{marche}"
         ),
         "color": ORANGE,
         "timestamp": _horodatage(),
     }
 
 
-async def notify_session_bientot_expiree(tracker_name: str, expiration: datetime, reconnexion: dict):
-    await _send(embed_session_bientot_expiree(tracker_name, expiration, reconnexion))
+async def notify_session_bientot_expiree(tracker_name: str, expiration: datetime, reconnexion: dict,
+                                         maintenant: Optional[datetime] = None):
+    await _send(embed_session_bientot_expiree(tracker_name, expiration, reconnexion, maintenant))
 
 
 # === RATIO ===

@@ -99,6 +99,8 @@ Variables critiques :
 | `ADMIN_PASSWORD` | Mot de passe admin du dashboard |
 | `HW_AGENT_TOKEN` | Token de l'agent hardware (`openssl rand -hex 16`) |
 | `SESSION_SYNC_TOKEN` | Facultatif : jeton du poste qui renouvelle la session C411 (`openssl rand -hex 32`), accepté sur `POST /scrapers/session/{tracker}` seulement |
+| `SESSION_DEPOT_CLE` | Facultatif : clé du script utilisateur `outils/trackboard-c411.user.js` (`openssl rand -hex 32`), lue dans l'en-tête `X-Depot-Cle` et acceptée sur `POST /scrapers/session/{tracker}` seulement |
+| `SESSION_ALERTE_HEURES` | Facultatif (défaut 24) : l'alerte Discord de session part quand il reste moins de ce nombre d'heures avant l'expiration prévue |
 | `DATABASE_URL` | URL PostgreSQL (cohérente avec POSTGRES_*) |
 | `POSTGRES_PASSWORD` | Mot de passe Postgres |
 | `TRACKER_USERNAME` | Pseudo affiché dans les liens shop bonus |
@@ -218,9 +220,11 @@ La connexion de ces deux sites passe par un captcha : TrackBoard ne s'y connecte
 2. F12, onglet Application (Chrome) ou Stockage (Firefox), Cookies : copier la valeur du cookie de session (`__Host-c411_session` pour C411, `__ygg_sess` pour Ygg).
 3. Dans TrackBoard, carte du tracker, « Reconnecter » (ou « Renouveler la session ») : coller la valeur, valider.
 
-Le backend (`POST /scrapers/session/{tracker}`, jeton de l'interface ou `SESSION_SYNC_TOKEN`) accepte deux corps : `{"valeur": "..."}` (le cookie de session seul) ou `{"storage_state": {...}}` (l'état complet rendu par `context.storage_state()` de Playwright, qui garde aussi les cookies secondaires du site ; les autres domaines et les cookies de Cloudflare sont écartés). Il écrit le fichier de cookies au format `storage_state` de Playwright et lance un relevé de contrôle ; la réponse dit si le site accepte la session. La valeur n'est ni journalisée ni renvoyée.
+Pour C411, le script utilisateur `outils/trackboard-c411.user.js` (Tampermonkey) évite le copier-coller : ouvrir `https://c411.org/login#trackboard` (lien des alertes Discord), se connecter, et le script dépose la session avec la clé `SESSION_DEPOT_CLE`. Installation en tête du fichier.
 
-La session C411 dure 7 jours fixes : un rappel Discord part au premier relevé à moins de 36 h de l'échéance. Pour ne plus copier le cookie à la main, [`session-sync/`](session-sync/README.md) installe sur le PC Windows une tâche planifiée (compte utilisateur, sans privilège) qui ouvre la page de connexion tous les 6 jours et dépose le `storage_state` une fois la connexion faite à la main ; le captcha n'est jamais contourné. Celle d'Ygg est prolongée par le site à chaque relevé.
+Le backend (`POST /scrapers/session/{tracker}`, jeton de l'interface, `SESSION_SYNC_TOKEN` ou en-tête `X-Depot-Cle`) accepte deux corps : `{"valeur": "..."}` (le cookie de session seul) ou `{"storage_state": {...}}` (l'état complet rendu par `context.storage_state()` de Playwright, qui garde aussi les cookies secondaires du site ; les autres domaines et les cookies de Cloudflare sont écartés). Il écrit le fichier de cookies au format `storage_state` de Playwright et lance un relevé de contrôle ; la réponse dit si le site accepte la session. La valeur n'est ni journalisée ni renvoyée.
+
+La session C411 dure 7 jours fixes : une alerte Discord part au premier relevé à moins de 24 h de l'échéance (`SESSION_ALERTE_HEURES`), signe que le renouvellement automatique n'a pas eu lieu, avec le lien de reconnexion. Pour ne plus copier le cookie à la main, [`session-sync/`](session-sync/README.md) installe sur le PC Windows une tâche planifiée (compte utilisateur, sans privilège) qui ouvre la page de connexion tous les 6 jours et dépose le `storage_state` une fois la connexion faite à la main ; le captcha n'est jamais contourné. Celle d'Ygg est prolongée par le site à chaque relevé.
 
 ### 7. Alertes Discord
 
@@ -314,7 +318,7 @@ trackboard/
 - Rate limiting sur `/auth/login` (5 tentatives/min/IP)
 - Conteneurs DB/back/front exposés uniquement sur `127.0.0.1` (le reverse proxy host fait la passerelle publique)
 - Agent hardware authentifié par token séparé
-- Dépôt de session depuis un autre poste : jeton dédié `SESSION_SYNC_TOKEN`, refusé partout ailleurs que sur `POST /scrapers/session/{tracker}`
+- Dépôt de session depuis un autre poste : jeton dédié `SESSION_SYNC_TOKEN` ou clé `SESSION_DEPOT_CLE` (en-tête `X-Depot-Cle`), refusés partout ailleurs que sur `POST /scrapers/session/{tracker}`
 - CORS configuré par domaine (pas de wildcard)
 - Aucun secret dans le code source (tout via `.env`, déjà gitignored)
 - `/health` public minimal, `/health/full` derrière auth pour les détails techniques

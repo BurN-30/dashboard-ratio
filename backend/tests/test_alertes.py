@@ -1,13 +1,21 @@
 """Alertes Discord : anti-répétition (échecs, avertissements, session) et texte des messages."""
 from datetime import datetime, timedelta, timezone
 
+import pytest
+from pydantic import ValidationError
+
+from app.config import Settings, get_settings
 from app.notifications import (
     decider_alerte_avertissements, decider_alerte_echec, embed_avertissements, embed_echec,
     embed_session_bientot_expiree, session_bientot_expiree, texte_rachat,
 )
+from app.scrapers.base import BaseScraper, ScraperConfig
+from app.scrapers.c411 import C411Scraper
+from app.scrapers.ygg import YggScraper
 
 T0 = datetime(2026, 11, 18, 13, 0, 30, tzinfo=timezone.utc)
 H = timedelta(hours=1)
+LIEN_C411 = {"lien_reconnexion": "https://c411.org/login#trackboard"}
 
 
 # --- échecs : une alerte au 3e, puis un rappel par 24 h
@@ -62,6 +70,19 @@ def test_message_session_expiree():
     assert "https://c411.org/login" in etapes and "`__Host-c411_session`" in etapes
     assert "[TrackBoard](https://trackboard.example)" in etapes and "« Reconnecter »" in etapes
     assert "session_absente" not in str(e)
+    assert "Se reconnecter" not in e["description"]  # pas de lien déclaré : message sans lien
+
+
+def test_message_session_expiree_avec_lien():
+    e = embed_echec("C411", 3, "session_expiree_reconnexion_manuelle", reconnexion={
+        "login_url": "https://c411.org/login", "cookie": "__Host-c411_session",
+        "trackboard_url": None, **LIEN_C411})
+    assert e["title"] == "Session expirée : C411"
+    assert "[Se reconnecter à C411](https://c411.org/login#trackboard)" in e["description"]
+    assert "« Reconnecter »" in e["fields"][0]["value"]  # la marche à suivre manuelle reste
+    # Le lien n'apparaît pas dans une panne ordinaire.
+    e = embed_echec("C411", 3, "api_auth_me_http_502", reconnexion={"cookie": "c", **LIEN_C411})
+    assert "trackboard" not in str(e)
 
 
 def test_message_echec_ordinaire():
@@ -166,19 +187,108 @@ def test_liste_de_torrents_bornee():
     assert len(e["fields"][0]["value"]) <= 1024
 
 
-# --- session manuelle : rappel avant l'expiration
+# --- session manuelle : alerte quand le renouvellement automatique n'a pas eu lieu
 
-def test_rappel_d_expiration_une_fois():
+def test_alerte_d_expiration_sous_24_h_une_fois():
     expiration = T0 + timedelta(days=7)
     assert not session_bientot_expiree(expiration, None, T0)
-    assert not session_bientot_expiree(expiration, None, expiration - timedelta(hours=40))
-    assert session_bientot_expiree(expiration, None, expiration - timedelta(hours=30))
-    assert not session_bientot_expiree(expiration, T0, expiration - timedelta(hours=30))
+    # L'ancien préavis (24 à 36 h avant) ne déclenche plus rien : le renouvellement
+    # automatique a encore le temps de passer.
+    assert not session_bientot_expiree(expiration, None, expiration - timedelta(hours=30))
+    assert not session_bientot_expiree(expiration, None, expiration - timedelta(hours=24, seconds=1))
+    assert not session_bientot_expiree(expiration, None, expiration - timedelta(hours=24))
+    assert session_bientot_expiree(expiration, None, expiration - timedelta(hours=23, minutes=59))
+    assert session_bientot_expiree(expiration, None, expiration - timedelta(hours=2))
+    # Une seule fois par session déposée.
+    assert not session_bientot_expiree(expiration, T0, expiration - timedelta(hours=2))
     assert not session_bientot_expiree(None, None, T0)
+    # Dates sans fuseau (SQLite).
+    assert session_bientot_expiree(expiration.replace(tzinfo=None), None, expiration - timedelta(hours=2))
 
 
-def test_message_d_expiration():
-    e = embed_session_bientot_expiree("C411", datetime(2026, 11, 25, 9, 45, tzinfo=timezone.utc),
-                                      {"cookie": "__Host-c411_session", "trackboard_url": None})
-    assert "25/11 vers 10 h 45" in e["title"]  # heure de Paris
-    assert "`__Host-c411_session`" in e["description"]
+def test_alerte_d_expiration_trois_releves_par_jour():
+    """Relevés à 8 h, 14 h et 20 h sur 7 jours : une seule alerte, à moins de 24 h de l'échéance."""
+    depot = datetime(2026, 11, 18, 9, 30, tzinfo=timezone.utc)
+    expiration = depot + timedelta(days=7)
+    prevenu, envois = None, []
+    releve = datetime(2026, 11, 18, 13, 0, tzinfo=timezone.utc)  # 14 h à Paris
+    for n in range(21):
+        if releve < expiration and session_bientot_expiree(expiration, prevenu, releve):
+            envois.append(releve)
+            prevenu = releve
+        releve += [6 * H, 12 * H, 6 * H][n % 3]
+    assert envois == [datetime(2026, 11, 24, 13, 0, tzinfo=timezone.utc)]
+    assert timedelta(0) < expiration - envois[0] < 24 * H
+
+
+def test_seuil_d_alerte_reglable(monkeypatch):
+    expiration = T0 + timedelta(days=7)
+    a_30_h = expiration - timedelta(hours=30)
+    assert session_bientot_expiree(expiration, None, a_30_h, preavis=timedelta(hours=36))
+    monkeypatch.setattr(get_settings(), "session_alerte_heures", 36)
+    assert session_bientot_expiree(expiration, None, a_30_h)
+    monkeypatch.setattr(get_settings(), "session_alerte_heures", 12)
+    assert not session_bientot_expiree(expiration, None, expiration - timedelta(hours=13))
+
+
+def test_seuil_d_alerte_configuration(monkeypatch):
+    monkeypatch.delenv("SESSION_ALERTE_HEURES")
+    assert Settings(_env_file=None).session_alerte_heures == 24
+    monkeypatch.setenv("SESSION_ALERTE_HEURES", "")
+    assert Settings(_env_file=None).session_alerte_heures == 24
+    monkeypatch.setenv("SESSION_ALERTE_HEURES", "12.5")
+    assert Settings(_env_file=None).session_alerte_heures == 12.5
+    monkeypatch.setenv("SESSION_ALERTE_HEURES", "0")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_message_d_expiration_avec_lien():
+    expiration = datetime(2026, 11, 25, 9, 45, tzinfo=timezone.utc)
+    e = embed_session_bientot_expiree(
+        "C411", expiration,
+        {"cookie": "__Host-c411_session", "trackboard_url": None, **LIEN_C411},
+        maintenant=expiration - timedelta(hours=19, minutes=45))
+    assert e["title"] == "Session C411 : renouvellement automatique non effectué"
+    assert "renouvellement automatique de la session n'a pas eu lieu" in e["description"]
+    assert "**19 h 45**" in e["description"]
+    assert "25/11 vers 10 h 45" in e["description"]  # heure de Paris
+    assert "[Se reconnecter à C411](https://c411.org/login#trackboard)" in e["description"]
+    assert "`__Host-c411_session`" in e["description"]  # repli sans le script
+    assert chr(0x2014) not in str(e)
+
+
+def test_message_d_expiration_sans_lien():
+    """Tracker sans lien de reconnexion (Ygg) : même alerte, marche à suivre manuelle, aucun lien."""
+    expiration = datetime(2026, 11, 25, 9, 45, tzinfo=timezone.utc)
+    for reconnexion in ({"cookie": "__ygg_sess", "trackboard_url": None},
+                        {"cookie": "__ygg_sess", "trackboard_url": None, "lien_reconnexion": None}):
+        e = embed_session_bientot_expiree("YGG", expiration, reconnexion,
+                                          maintenant=expiration - timedelta(minutes=40))
+        assert "**40 min**" in e["description"] and "`__ygg_sess`" in e["description"]
+        assert "](" not in e["description"] and "http" not in e["description"]
+        assert "script" not in e["description"]
+
+
+def test_message_d_expiration_echeance_depassee():
+    expiration = datetime(2026, 11, 25, 9, 45, tzinfo=timezone.utc)
+    e = embed_session_bientot_expiree("C411", expiration, {"cookie": "c", **LIEN_C411},
+                                      maintenant=expiration + timedelta(hours=1))
+    assert "est dépassée" in e["description"] and "expire dans" not in e["description"]
+
+
+def test_lien_de_reconnexion_declare_par_le_tracker():
+    assert C411Scraper.SESSION_COOKIE["lien_reconnexion"] == "https://c411.org/login#trackboard"
+    assert "lien_reconnexion" not in YggScraper.SESSION_COOKIE
+    assert BaseScraper.SESSION_COOKIE is None
+
+
+def test_reconnexion_transmet_le_lien(monkeypatch):
+    from app.scrapers import routes
+
+    def scraper(classe, nom):
+        return classe(ScraperConfig(name=nom, login_url="https://site.example/login",
+                                    profile_url_template="https://site.example/me"))
+
+    assert routes._reconnexion(scraper(C411Scraper, "C411"))["lien_reconnexion"] == LIEN_C411["lien_reconnexion"]
+    assert routes._reconnexion(scraper(YggScraper, "YGG"))["lien_reconnexion"] is None

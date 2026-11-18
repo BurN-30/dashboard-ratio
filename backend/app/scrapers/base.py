@@ -64,6 +64,7 @@ class BaseScraper(ABC):
     # Trackers a session manuelle (captcha a la connexion : C411, Ygg) : cookie de session
     # que l'utilisateur depose depuis son navigateur. {"name", "domain", "duree_jours", "fixe"} ;
     # « fixe » = la duree court depuis la connexion, les releves ne la prolongent pas.
+    # Facultatif : "lien_reconnexion", lien cliquable mis dans les alertes Discord de session.
     SESSION_COOKIE: Optional[dict] = None
 
     def __init__(self, config: ScraperConfig):
