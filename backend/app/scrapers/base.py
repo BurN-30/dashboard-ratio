@@ -233,7 +233,10 @@ class BaseScraper(ABC):
                 stats = await self.scrape(page)
                 # Rafraichir les cookies apres usage reussi
                 await self._save_cookies(context)
-                logger.info("[%s] Scraping termine (via cookies)", self.name)
+                logger.info(
+                    "[%s] Scraping termine (via cookies, ratio=%s, upload=%s)",
+                    self.name, getattr(stats, "ratio", None), getattr(stats, "vol_upload", None),
+                )
                 return stats
             finally:
                 await context.close()
@@ -276,7 +279,10 @@ class BaseScraper(ABC):
 
             # Scrape
             stats = await self.scrape(page)
-            logger.info("[%s] Scraping termine", self.name)
+            logger.info(
+                "[%s] Scraping termine (ratio=%s, upload=%s)",
+                self.name, getattr(stats, "ratio", None), getattr(stats, "vol_upload", None),
+            )
             return stats
 
         except Exception as e:
